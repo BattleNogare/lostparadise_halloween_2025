@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Karte mit Markierungen</title>
+  <style>
+    html, body { margin:0; padding:0; height:100%; }
+    #wrap { height:100%; display:flex; flex-direction:column; }
+    header, footer { padding:8px 12px; background:#f5f5f5; font-family:system-ui, sans-serif; }
+    #toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    #stage { flex:1; overflow:auto; background:#fff; }
+    .btn { padding:6px 10px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; }
+    .btn:active { transform: translateY(1px); }
+    .hint { color:#666; font-size:0.9em; }
+    /* Marker-Stile */
+    .marker { cursor:grab; }
+    .marker:active { cursor:grabbing; }
+    .marker circle { stroke:#000; stroke-width:1; fill:rgba(255,0,0,.85); }
+    .marker text { font: 12px/1.2 system-ui, sans-serif; user-select:none; text-anchor:middle; dominant-baseline:hanging; }
+    /* Damit Klicks auf die Karte die Marker nicht blockieren */
+    #svgRoot * { pointer-events:visiblePainted; }
+    #markerLayer { pointer-events:none; }
+    #markerLayer > g { pointer-events:auto; }
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <div id="toolbar">
+      <button id="addMode" class="btn">➕ Markieren</button>
+      <button id="selectMode" class="btn">🖱️ Verschieben/Löschen</button>
+      <button id="exportBtn" class="btn">⤴️ Export (JSON)</button>
+      <button id="importBtn" class="btn">⤵️ Import (JSON)</button>
+      <button id="clearBtn" class="btn">🗑️ Alle löschen</button>
+      <span class="hint">Links-Klick setzt Marker • Ziehen = verschieben • Shift+Klick = löschen</span>
+    </div>
+  </header>
+
+  <div id="stage">
+    <!-- SVG wird dynamisch geladen und inline eingefügt -->
+    <svg id="svgRoot" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <footer>
+    <span class="hint">Marker werden lokal im Browser gespeichert (localStorage). Für Multi-User-Persistenz siehe Hinweise unten.</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const SVG_PATH = 'map.svg';      // relative Pfad zu deiner großen SVG
+  const STORAGE_KEY = 'markers.v1'; // localStorage Key
+  let mode = 'add';                 // 'add' oder 'select'
+  let svg, vb;                      // svg Element & viewBox {x,y,width,height}
+  let markerLayer;                  // <g> Ebene für Marker
+  let markers = [];                 // Array {id, px, py, label}
+
+  const $ = (sel, el=document) => el.querySelector(sel);
+  const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+
+  // UI
+  $('#addMode').onclick = () => setMode('add');
+  $('#selectMode').onclick = () => setMode('select');
+  $('#exportBtn').onclick = exportJSON;
+  $('#importBtn').onclick = importJSON;
+  $('#clearBtn').onclick = clearAll;
+
+  setMode('add');
+
+  // SVG laden und inline einfügen (wichtig für Interaktion)
+  fetch(SVG_PATH).then(r => r.text()).then(txt => {
+    $('#svgRoot').outerHTML = txt
+      .replace('<svg', '<svg id="svgRoot"')
+      .replace('</svg>', '<g id="markerLayer"></g></svg>');
+    svg = $('#svgRoot');
+    markerLayer = $('#markerLayer');
+    // ViewBox sicherstellen
+    if (!svg.getAttribute('viewBox')) {
+      // Falls die Quelle keinen viewBox hat, versuchen wir einen zu setzen
+      const w = parseFloat(svg.getAttribute('width')) || 1000;
+      const h = parseFloat(svg.getAttribute('height')) || 1000;
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    }
+    const [x,y,w,h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+    vb = {x,y,width:w,height:h};
+
+    // Klick zum Hinzufügen
+    svg.addEventListener('click', onSvgClick);
+
+    // Bestehende Marker laden
+    loadMarkers();
+    renderMarkers();
+  });
+
+  function setMode(m){
+    mode = m;
+    $('#addMode').style.fontWeight = (m==='add') ? '600' : '400';
+    $('#selectMode').style.fontWeight = (m==='select') ? '600' : '400';
+  }
+
+  // Klick-Position in SVG-UserSpace umrechnen + in Prozent speichern
+  function getSvgPoint(evt) {
+    const pt = (svg.createSVGPoint) ? svg.createSVGPoint() : {x:0,y:0};
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    const sp = pt.matrixTransform ? pt.matrixTransform(ctm) : pt; // Fallback
+    // Prozent relativ zur viewBox
+    const px = (sp.x - vb.x) / vb.width * 100;
+    const py = (sp.y - vb.y) / vb.height * 100;
+    return {px, py};
+  }
+
+  function onSvgClick(evt){
+    if (mode !== 'add') return;
+    // Klick ignorieren, wenn auf Marker-Layer getroffen (damit nicht doppelt)
+    if (evt.target.closest && evt.target.closest('#markerLayer')) return;
+
+    const {px, py} = getSvgPoint(evt);
+    const label = prompt('Optional: Label/Notiz für den Marker (leer lassen möglich)', '') || '';
+    addMarker(px, py, label);
+    saveMarkers();
+    renderMarkers();
+  }
+
+  function addMarker(px, py, label='') {
+    const id = crypto.randomUUID ? crypto.randomUUID() : 'm'+Date.now()+Math.random();
+    markers.push({id, px, py, label});
+  }
+
+  function renderMarkers(){
+    markerLayer.innerHTML = '';
+    markers.forEach(m => {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.classList.add('marker');
+      g.setAttribute('data-id', m.id);
+
+      const cx = vb.x + (m.px/100)*vb.width;
+      const cy = vb.y + (m.py/100)*vb.height;
+
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', cx);
+      circle.setAttribute('cy', cy);
+      circle.setAttribute('r', Math.max(vb.width, vb.height) * 0.006); // skalierbarer Radius
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', cx);
+      text.setAttribute('y', cy);
+      text.textContent = m.label || '●';
+
+      g.appendChild(circle);
+      g.appendChild(text);
+      markerLayer.appendChild(g);
+
+      // Drag & Drop
+      let dragging = false;
+      g.addEventListener('mousedown', (e) => {
+        if (mode !== 'select') return;
+        dragging = true;
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const {px, py} = getSvgPoint(e);
+        m.px = Math.min(100, Math.max(0, px));
+        m.py = Math.min(100, Math.max(0, py));
+        updateMarkerNode(g, m);
+      });
+      window.addEventListener('mouseup', (e) => {
+        if (!dragging) return;
+        dragging = false;
+        saveMarkers();
+      });
+
+      // Löschen (Shift+Klick)
+      g.addEventListener('click', (e) => {
+        if (mode !== 'select') return;
+        if (e.shiftKey) {
+          const idx = markers.findIndex(x => x.id === m.id);
+          if (idx >= 0) {
+            markers.splice(idx, 1);
+            saveMarkers();
+            renderMarkers();
+          }
+        } else if (e.altKey || e.metaKey || e.ctrlKey) {
+          const newLabel = prompt('Label/Notiz bearbeiten', m.label) ?? m.label;
+          m.label = newLabel;
+          saveMarkers();
+          updateMarkerNode(g, m);
+        }
+        e.stopPropagation();
+      });
+    });
+  }
+
+  function updateMarkerNode(g, m){
+    const cx = vb.x + (m.px/100)*vb.width;
+    const cy = vb.y + (m.py/100)*vb.height;
+    const circle = $('circle', g);
+    const text = $('text', g);
+    circle.setAttribute('cx', cx);
+    circle.setAttribute('cy', cy);
+    text.setAttribute('x', cx);
+    text.setAttribute('y', cy);
+    text.textContent = m.label || '●';
+  }
+
+  function saveMarkers(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
+  }
+  function loadMarkers(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      markers = raw ? JSON.parse(raw) : [];
+    } catch(e) {
+      markers = [];
+    }
+  }
+  function exportJSON(){
+    const blob = new Blob([JSON.stringify(markers, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'markers.json'; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function importJSON(){
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'application/json';
+    inp.onchange = () => {
+      const file = inp.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (Array.isArray(data)) {
+            markers = data;
+            saveMarkers();
+            renderMarkers();
+          } else {
+            alert('Ungültiges JSON');
+          }
+        } catch(e) { alert('Fehler beim Lesen der Datei'); }
+      };
+      reader.readAsText(file);
+    };
+    inp.click();
+  }
+  function clearAll(){
+    if (confirm('Alle Marker löschen?')) {
+      markers = [];
+      saveMarkers();
+      renderMarkers();
+    }
+  }
+
+})();
+</script>
+</body>
+</html>
