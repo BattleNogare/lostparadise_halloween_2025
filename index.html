@@ -64,7 +64,7 @@
       max-width:600px;
     }
 
-    /* === Logo + Text rechts === */
+    /* === Brandbereich rechts === */
     #brand {
       display:flex;
       align-items:center;
@@ -102,7 +102,7 @@
       92%, 95%, 100% { opacity:1; }
     }
 
-    /* === Main layout === */
+    /* === Main Layout === */
     #main {
       flex:1;
       display:flex;
@@ -175,22 +175,24 @@
       box-shadow:0 0 10px rgba(255,106,0,0.5);
     }
 
-    /* === Marker === */
+    /* Marker */
     .marker circle {
       stroke:var(--marker-stroke);
       stroke-width:1;
       fill:var(--marker-fill);
       filter: drop-shadow(0 0 4px rgba(255,106,0,0.8));
+      transition:fill .1s, stroke .1s, stroke-width .1s;
     }
+
     .marker.highlight circle {
       fill:var(--marker-highlight-fill);
       stroke:var(--marker-highlight-stroke);
       stroke-width:3;
       filter: drop-shadow(0 0 6px rgba(255,255,150,0.8));
     }
+
     #markerLayer { pointer-events:none; }
     #markerLayer > g { pointer-events:auto; }
-
   </style>
 </head>
 <body>
@@ -227,72 +229,405 @@
   </div>
 </div>
 
-<!-- === JavaScript bleibt unverändert aus der letzten Version === -->
 <script>
 (function(){
+  // === Config ===
   const SVG_PATH='https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';
-  const WEB_APP_URL='https://script.google.com/macros/s/AKfycbyUq4LMZhjRkzG2pwmNrgG1GdLjFi6H3bivz_2SEDYA0m9_lMrPQjxdFmEo0ukgdeCKKA/exec';
   const STORAGE_KEY='markers.v1';
-  const ZOOM_FACTOR=1.4, ZOOM_MAX=20;
-  const SCALE_OUT=0.8, SCALE_IN=0.1;
 
-  let svg,markerLayer,vb,baseViewBox,spacePressed=false,isPanning=false,panStart=null,panStartVB=null;
-  let markers=[],markerDomMap={},nextId=1;
+  const ZOOM_FACTOR=1.4;
+  const ZOOM_MAX=20;
 
-  const $=(s,e=document)=>e.querySelector(s);
+  // Marker-Skalierung abhängig vom Zoom:
+  const SCALE_OUT=0.8; // rausgezoomt
+  const SCALE_IN=0.1;  // voll reingezoomt
+
+  // State
+  let svg, markerLayer;
+  let vb;          // {x,y,width,height} aktuelle ViewBox
+  let baseViewBox; // {x,y,width,height} ursprüngliche Gesamtkarte
+  let isPanning=false;
+  let panStart=null;
+  let panStartVB=null;
+  let spacePressed=false;
+
+  // Marker: { id, px, py, visible, createdAt }
+  let markers=[];
+  let markerDomMap={};
+  let nextId=1;
+
+  const $=(sel,root=document)=>root.querySelector(sel);
   const getNextId=()=>String(nextId++).padStart(4,'0');
 
+  // === Init SVG ===
   fetch(SVG_PATH).then(r=>r.text()).then(txt=>{
-    $('#svgRoot').outerHTML=txt
+    $('#svgRoot').outerHTML = txt
       .replace('<svg','<svg id="svgRoot" style="width:100%;height:100%;touch-action:none;background:#000;"')
       .replace('</svg>','<g id="markerLayer"></g></svg>');
-    svg=$('#svgRoot'); markerLayer=$('#markerLayer');
-    $('#stage').addEventListener('contextmenu',e=>e.preventDefault());
-    svg.addEventListener('contextmenu',e=>e.preventDefault());
-    if(!svg.getAttribute('viewBox')){
-      const w=parseFloat(svg.getAttribute('width'))||1000;
-      const h=parseFloat(svg.getAttribute('height'))||1000;
-      svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+
+    svg = $('#svgRoot');
+    markerLayer = $('#markerLayer');
+
+    // Kontextmenü auf der Map deaktivieren
+    $('#stage').addEventListener('contextmenu', e=>e.preventDefault());
+    svg.addEventListener('contextmenu', e=>e.preventDefault());
+
+    // ViewBox initial sichern
+    if (!svg.getAttribute('viewBox')) {
+      const w = parseFloat(svg.getAttribute('width')) || 1000;
+      const h = parseFloat(svg.getAttribute('height')) || 1000;
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     }
-    const [x,y,w,h]=svg.getAttribute('viewBox').split(/\s+/).map(Number);
-    vb={x,y,width:w,height:h}; baseViewBox={...vb};
-    svg.addEventListener('click',onAdd); svg.addEventListener('wheel',onWheel,{passive:false});
-    svg.addEventListener('mousedown',onMouseDown); window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp);
-    window.addEventListener('keydown',e=>{if(e.code==='Space'){spacePressed=true;e.preventDefault();}});
-    window.addEventListener('keyup',e=>{if(e.code==='Space')spacePressed=false;});
-    loadLocal(); updateNextId(); render();
+
+    {
+      const [x,y,w,h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+      vb = {x,y,width:w,height:h};
+      baseViewBox = {...vb};
+    }
+
+    // Event-Listener
+    svg.addEventListener('click', onSvgClickAdd);               // Shift+Linksklick -> Marker setzen
+    svg.addEventListener('wheel', onWheel, {passive:false});    // Zoom
+    svg.addEventListener('mousedown', onMouseDownPanOrDragStart);
+    window.addEventListener('mousemove', onMouseMoveAll);
+    window.addEventListener('mouseup', onMouseUpAll);
+
+    window.addEventListener('keydown', e=>{
+      if(e.code==='Space'){
+        spacePressed=true;
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', e=>{
+      if(e.code==='Space'){
+        spacePressed=false;
+      }
+    });
+
+    // Load markers (local only in this version)
+    loadLocal();
+    updateNextIdFromMarkers();
+
+    renderMarkers();  // initial draw
+    rebuildHistory(); // initial history
   });
 
-  function updateNextId(){const ids=markers.map(m=>parseInt(m.id)).filter(n=>!isNaN(n));nextId=(ids.length?Math.max(...ids)+1:1);}
-  function clientToBase(evt){const pt=svg.createSVGPoint();pt.x=evt.clientX;pt.y=evt.clientY;const sp=pt.matrixTransform(svg.getScreenCTM().inverse());
-    return{px:(sp.x-baseViewBox.x)/baseViewBox.width*100,py:(sp.y-baseViewBox.y)/baseViewBox.height*100};}
-  function percentToAbs(m){return{absX:baseViewBox.x+(m.px/100)*baseViewBox.width,absY:baseViewBox.y+(m.py/100)*baseViewBox.height};}
-  function getR(){const z=baseViewBox.width/vb.width,t=(z-1)/(ZOOM_MAX-1),s=SCALE_OUT*(1-t)+SCALE_IN*t;return Math.max(baseViewBox.width,baseViewBox.height)*0.006*s;}
-  function onAdd(e){if(!e.shiftKey)return;if(e.target.closest&&e.target.closest('#markerLayer'))return;const {px,py}=clientToBase(e);const m={id:getNextId(),px,py,visible:true,createdAt:Date.now()};markers.push(m);save();render();}
-  function render(){markerLayer.innerHTML='';markerDomMap={};const r=getR();markers.filter(m=>m.visible).forEach(m=>{const {absX,absY}=percentToAbs(m);
-    const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.classList.add('marker');g.dataset.id=m.id;
-    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',absX);c.setAttribute('cy',absY);c.setAttribute('r',r);
-    g.appendChild(c);markerLayer.appendChild(g);markerDomMap[m.id]=g;interact(g,m);});history();}
-  function interact(g,m){let drag=false;g.addEventListener('mousedown',e=>{if(e.button===0&&!e.shiftKey){drag=true;e.preventDefault();}
-    if(e.button===2&&e.shiftKey){e.preventDefault();m.visible=false;save();render();}});g._dragRef=m;g._isDragging=()=>drag;g._stop=()=>{drag=false;};}
-  function moveDrag(e){for(const id in markerDomMap){const g=markerDomMap[id],m=markers.find(mm=>mm.id===id);if(!m||!g._isDragging||!g._isDragging())continue;
-    const p=clientToBase(e);m.px=p.px;m.py=p.py;const {absX,absY}=percentToAbs(m);const c=g.querySelector('circle');c.setAttribute('cx',absX);c.setAttribute('cy',absY);}}
-  function stopDrag(){for(const id in markerDomMap){const g=markerDomMap[id],m=markers.find(mm=>mm.id===id);if(!m||!g._isDragging||!g._isDragging())continue;g._stop();save();render();}}
-  function history(){const l=$('#historyList');l.innerHTML='';markers.filter(m=>m.visible).slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(m=>{const i=document.createElement('div');i.className='historyItem';i.textContent='Marker '+m.id;
-    i.addEventListener('mousedown',()=>{markerDomMap[m.id]?.classList.add('highlight');});window.addEventListener('mouseup',()=>{markerDomMap[m.id]?.classList.remove('highlight');});l.appendChild(i);});}
-  function clamp(x,y,w,h){if(w>baseViewBox.width)w=baseViewBox.width;if(h>baseViewBox.height)h=baseViewBox.height;
-    const minX=baseViewBox.x,maxX=baseViewBox.x+baseViewBox.width-w,minY=baseViewBox.y,maxY=baseViewBox.y+baseViewBox.height-h;
-    if(x<minX)x=minX;if(x>maxX)x=maxX;if(y<minY)y=minY;if(y>maxY)y=maxY;return{x,y,w,h};}
-  function onWheel(e){e.preventDefault();const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const sp=pt.matrixTransform(svg.getScreenCTM().inverse());
-    const scale=e.deltaY<0?1/1.4:1.4;let newW=vb.width*scale,newH=vb.height*scale;const minW=baseViewBox.width/ZOOM_MAX,minH=baseViewBox.height/ZOOM_MAX;
-    if(newW<minW)newW=minW;if(newH<minH)newH=minH;if(newW>baseViewBox.width)newW=baseViewBox.width;if(newH>baseViewBox.height)newH=baseViewBox.height;
-    const kx=(sp.x-vb.x)/vb.width,ky=(sp.y-vb.y)/vb.height;const newX=sp.x-kx*newW,newY=sp.y-ky*newH;const r=clamp(newX,newY,newW,newH);vb=r;svg.setAttribute('viewBox',`${r.x} ${r.y} ${r.w} ${r.h}`);render();}
-  function onMouseDown(e){if((e.button===0&&spacePressed)||(e.button===2&&!e.shiftKey)){isPanning=true;panStart={x:e.clientX,y:e.clientY};panStartVB={...vb};e.preventDefault();}}
-  function onMove(e){moveDrag(e);if(!isPanning)return;const dx=e.clientX-panStart.x,dy=e.clientY-panStart.y;const m=svg.getScreenCTM();
-    const sx=vb.width/(m.a*svg.clientWidth),sy=vb.height/(m.d*svg.clientHeight);const newX=panStartVB.x-dx*sx,newY=panStartVB.y-dy*sy;const r=clamp(newX,newY,vb.width,vb.height);vb=r;svg.setAttribute('viewBox',`${r.x} ${r.y} ${r.w} ${r.h}`);}
-  function onUp(){isPanning=false;stopDrag();}
-  function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(markers));}
-  function loadLocal(){try{markers=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch{markers=[];}}
+  // === Helpers: ViewBox management ===
+
+  // clamp the new box so you can't pan outside or zoom out too far
+  function clampViewBox(x,y,width,height){
+    // Limit zoom-out
+    if (width  > baseViewBox.width)  width  = baseViewBox.width;
+    if (height > baseViewBox.height) height = baseViewBox.height;
+
+    // Constrain panning so box stays within base
+    const minX = baseViewBox.x;
+    const maxX = baseViewBox.x + baseViewBox.width  - width;
+    const minY = baseViewBox.y;
+    const maxY = baseViewBox.y + baseViewBox.height - height;
+
+    if (x < minX) x = minX;
+    if (x > maxX) x = maxX;
+    if (y < minY) y = minY;
+    if (y > maxY) y = maxY;
+
+    return {x,y,width,height};
+  }
+
+  // apply a new viewBox, update state, optionally re-render markers (for size on zoom)
+  function setViewBox(newVB, {rerender}){
+    vb = newVB;
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.width} ${vb.height}`);
+    if (rerender) {
+      renderMarkers();
+      rebuildHistory(); // optional, but keeps consistent timing
+    }
+  }
+
+  // === Coordinate transforms ===
+
+  // Screen -> % of full map
+  function clientToBasePercent(evt){
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const px = (sp.x - baseViewBox.x) / baseViewBox.width  * 100;
+    const py = (sp.y - baseViewBox.y) / baseViewBox.height * 100;
+
+    return {
+      px: Math.min(100, Math.max(0, px)),
+      py: Math.min(100, Math.max(0, py))
+    };
+  }
+
+  // % of map -> absolute SVG coords
+  function percentToAbsXY(m){
+    return {
+      absX: baseViewBox.x + (m.px/100)*baseViewBox.width,
+      absY: baseViewBox.y + (m.py/100)*baseViewBox.height
+    };
+  }
+
+  // current marker radius depending on zoom vb.width vs baseViewBox.width
+  function getCurrentMarkerRadius(){
+    const zoomFactor = baseViewBox.width / vb.width; // 1 .. ZOOM_MAX
+    const t = (zoomFactor - 1) / (ZOOM_MAX - 1);     // 0 .. 1
+    const scaleNow = SCALE_OUT*(1 - t) + SCALE_IN*t; // interpolate
+    const baseLen = Math.max(baseViewBox.width, baseViewBox.height);
+    return baseLen * 0.006 * scaleNow;
+  }
+
+  // === Markers ===
+
+  function onSvgClickAdd(evt){
+    if (!evt.shiftKey) return;
+    // Keine Doppel-Erstellung, wenn auf Marker geklickt wurde
+    if (evt.target.closest && evt.target.closest('#markerLayer')) return;
+
+    const {px,py} = clientToBasePercent(evt);
+    const m = {
+      id: getNextId(),
+      px,
+      py,
+      visible: true,
+      createdAt: Date.now()
+    };
+    markers.push(m);
+    saveLocal();
+    renderMarkers();
+    rebuildHistory();
+  }
+
+  function renderMarkers(){
+    markerLayer.innerHTML = '';
+    markerDomMap = {};
+
+    const dynR = getCurrentMarkerRadius();
+
+    markers
+      .filter(m=>m.visible)
+      .forEach(m=>{
+        const {absX,absY} = percentToAbsXY(m);
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+        g.classList.add('marker');
+        g.setAttribute('data-id',m.id);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        circle.setAttribute('cx',absX);
+        circle.setAttribute('cy',absY);
+        circle.setAttribute('r',dynR);
+
+        g.appendChild(circle);
+        markerLayer.appendChild(g);
+
+        markerDomMap[m.id] = g;
+        attachMarkerInteraction(g,m);
+      });
+  }
+
+  // marker drag + hide (shift+rightclick)
+  function attachMarkerInteraction(g,m){
+    let dragging=false;
+
+    g.addEventListener('mousedown', e=>{
+      // Linke Maustaste ohne Shift => drag
+      if(e.button===0 && !e.shiftKey){
+        dragging=true;
+        e.preventDefault();
+      }
+      // Rechte Maustaste + Shift => ausblenden
+      if(e.button===2 && e.shiftKey){
+        e.preventDefault();
+        m.visible=false;
+        saveLocal();
+        renderMarkers();
+        rebuildHistory();
+      }
+    });
+
+    // interne helper fürs globale mousemove/mouseup
+    g._dragMarkerRef = m;
+    g._isDragging    = () => dragging;
+    g._stopDragging  = () => { dragging=false; };
+  }
+
+  function dragMoveMarkerIfNeeded(evt){
+    for(const id in markerDomMap){
+      const g = markerDomMap[id];
+      const m = markers.find(mm=>mm.id===id);
+      if(!m || !g._isDragging || !g._isDragging()) continue;
+
+      const p = clientToBasePercent(evt);
+      m.px = p.px;
+      m.py = p.py;
+
+      const {absX,absY} = percentToAbsXY(m);
+      const circle = g.querySelector('circle');
+      circle.setAttribute('cx',absX);
+      circle.setAttribute('cy',absY);
+    }
+  }
+
+  function dragStopIfNeeded(){
+    for(const id in markerDomMap){
+      const g = markerDomMap[id];
+      const m = markers.find(mm=>mm.id===id);
+      if(!m || !g._isDragging || !g._isDragging()) continue;
+
+      g._stopDragging();
+      saveLocal();
+      renderMarkers();
+      rebuildHistory();
+    }
+  }
+
+  // === History ===
+
+  function rebuildHistory(){
+    const list = $('#historyList');
+    list.innerHTML = '';
+
+    markers
+      .filter(m=>m.visible)
+      .slice()
+      .sort((a,b)=>b.createdAt - a.createdAt)
+      .forEach(m=>{
+        const item=document.createElement('div');
+        item.className='historyItem';
+        item.textContent='Marker '+m.id;
+        item.dataset.id=m.id;
+
+        let isHeld=false;
+
+        item.addEventListener('mousedown', e=>{
+          if(e.button!==0) return;
+          isHeld=true;
+          highlightMarker(m.id,true);
+          e.preventDefault();
+        });
+
+        window.addEventListener('mouseup', ()=>{
+          if(!isHeld) return;
+          isHeld=false;
+          highlightMarker(m.id,false);
+        });
+
+        list.appendChild(item);
+      });
+  }
+
+  function highlightMarker(id,on){
+    const g = markerDomMap[id];
+    if(!g)return;
+    if(on) g.classList.add('highlight');
+    else   g.classList.remove('highlight');
+  }
+
+  // === Zoom ===
+
+  function onWheel(e){
+    e.preventDefault();
+
+    // Punkt unter Maus als Anker fürs Zoomen
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const scale = (e.deltaY<0) ? (1/ZOOM_FACTOR) : ZOOM_FACTOR;
+
+    let newWidth  = vb.width  * scale;
+    let newHeight = vb.height * scale;
+
+    // Maximal reinzoomen
+    const minWidth  = baseViewBox.width  / ZOOM_MAX;
+    const minHeight = baseViewBox.height / ZOOM_MAX;
+    if (newWidth  < minWidth ) newWidth  = minWidth;
+    if (newHeight < minHeight) newHeight = minHeight;
+
+    // Maximal rauszoomen
+    if (newWidth  > baseViewBox.width ) newWidth  = baseViewBox.width;
+    if (newHeight > baseViewBox.height) newHeight = baseViewBox.height;
+
+    // Zoom auf Maus positionieren
+    const kx = (sp.x - vb.x) / vb.width;
+    const ky = (sp.y - vb.y) / vb.height;
+
+    const newX = sp.x - kx * newWidth;
+    const newY = sp.y - ky * newHeight;
+
+    const clamped = clampViewBox(newX, newY, newWidth, newHeight);
+
+    // Bei Zoom -> Markergröße ändert sich => rerender:true
+    setViewBox(clamped, {rerender:true});
+  }
+
+  // === Pan / Drag global ===
+
+  function onMouseDownPanOrDragStart(e){
+    // Pan aktivieren:
+    // - Space + Linksklick
+    // - oder Rechtsklick (ohne Shift)
+    if ((e.button===0 && spacePressed) ||
+        (e.button===2 && !e.shiftKey)) {
+
+      isPanning=true;
+      panStart   ={x:e.clientX,y:e.clientY};
+      panStartVB ={...vb}; // copy
+      e.preventDefault();
+    }
+  }
+
+  function onMouseMoveAll(e){
+    // Falls Marker gerade gezogen wird -> updaten
+    dragMoveMarkerIfNeeded(e);
+
+    if (!isPanning) return;
+
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+
+    const m = svg.getScreenCTM();
+    const scaleX = vb.width  / (m.a * svg.clientWidth);
+    const scaleY = vb.height / (m.d * svg.clientHeight);
+
+    const newX = panStartVB.x - dx * scaleX;
+    const newY = panStartVB.y - dy * scaleY;
+
+    const clamped = clampViewBox(newX, newY, vb.width, vb.height);
+
+    // Bei Pan ändert sich nur x/y, nicht width/height -> Markergröße bleibt gleich
+    setViewBox(clamped, {rerender:false});
+  }
+
+  function onMouseUpAll(){
+    isPanning=false;
+    dragStopIfNeeded();
+  }
+
+  // === Local storage ===
+  function saveLocal(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
+  }
+
+  function loadLocal(){
+    try {
+      markers = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch {
+      markers = [];
+    }
+  }
+
+  function updateNextIdFromMarkers(){
+    const nums = markers
+      .map(m=>parseInt(m.id,10))
+      .filter(n=>!isNaN(n));
+    nextId = (nums.length ? Math.max(...nums)+1 : 1);
+  }
+
 })();
 </script>
 </body>
