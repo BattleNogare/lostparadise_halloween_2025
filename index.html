@@ -7,6 +7,8 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/halloween_fav.ico">
+  <!-- Halloween-Schrift -->
+  <link href="https://fonts.googleapis.com/css2?family=Rubik+Wet+Paint&display=swap" rel="stylesheet">
 
   <style>
     :root {
@@ -84,18 +86,20 @@
       display:block;
     }
 
-    .neonText {
-      font-size:1rem;
-      font-weight:700;
-      color:var(--border-glow);
-      text-shadow:
-        0 0 4px rgba(255,106,0,1),
-        0 0 8px rgba(255,106,0,0.8),
-        0 0 16px rgba(255,106,0,0.6);
-      letter-spacing:0.04em;
-      animation: flicker 3s infinite steps(1);
-      white-space:nowrap;
-    }
+.neonText {
+  font-family: 'Rubik Wet Paint', cursive;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--border-glow);
+  text-shadow:
+    0 0 4px rgba(255,106,0,1),
+    0 0 8px rgba(255,106,0,0.8),
+    0 0 16px rgba(255,106,0,0.6),
+    2px 2px 4px rgba(150,0,0,0.6);
+  letter-spacing: 0.04em;
+  animation: flicker 3s infinite steps(1);
+  white-space: nowrap;
+}
 
     @keyframes flicker {
       0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity:1; }
