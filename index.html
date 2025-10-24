@@ -5,20 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Karte mit Markierungen</title>
   <style>
-    html, body { margin:0; padding:0; height:100%; }
-    #wrap { height:100%; display:flex; flex-direction:column; }
-    header, footer { padding:8px 12px; background:#f5f5f5; font-family:system-ui, sans-serif; }
+    html, body { margin:0; height:100%; }
+    #wrap { height:100%; display:flex; flex-direction:column; font-family:system-ui, sans-serif; }
+    header, footer { padding:8px 12px; background:#f5f5f5; }
     #toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    #stage { flex:1; overflow:auto; background:#fff; }
+    #stage { flex:1; overflow:hidden; background:#fff; }
     .btn { padding:6px 10px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; }
     .btn:active { transform: translateY(1px); }
     .hint { color:#666; font-size:0.9em; }
-    /* Marker-Stile */
     .marker { cursor:grab; }
     .marker:active { cursor:grabbing; }
     .marker circle { stroke:#000; stroke-width:1; fill:rgba(255,0,0,.85); }
     .marker text { font: 12px/1.2 system-ui, sans-serif; user-select:none; text-anchor:middle; dominant-baseline:hanging; }
-    /* Damit Klicks auf die Karte die Marker nicht blockieren */
     #svgRoot * { pointer-events:visiblePainted; }
     #markerLayer { pointer-events:none; }
     #markerLayer > g { pointer-events:auto; }
@@ -30,67 +28,83 @@
     <div id="toolbar">
       <button id="addMode" class="btn">➕ Markieren</button>
       <button id="selectMode" class="btn">🖱️ Verschieben/Löschen</button>
-      <button id="exportBtn" class="btn">⤴️ Export (JSON)</button>
-      <button id="importBtn" class="btn">⤵️ Import (JSON)</button>
+      <button id="reloadBtn" class="btn">↻ Vom Sheet laden</button>
       <button id="clearBtn" class="btn">🗑️ Alle löschen</button>
-      <span class="hint">Links-Klick setzt Marker • Ziehen = verschieben • Shift+Klick = löschen</span>
+      <label class="hint">Marker-Größe:
+        <input id="sizeInput" type="number" step="0.1" min="0.1" value="1.0" style="width:4em;">
+      </label>
+      <span class="hint">Scroll = Zoom • Leertaste+Ziehen/Pan oder Rechtsklick+Ziehen • Shift+Klick = löschen • Alt/Ctrl+Klick = Label</span>
     </div>
   </header>
 
   <div id="stage">
-    <!-- SVG wird dynamisch geladen und inline eingefügt -->
-    <svg id="svgRoot" xmlns="http://www.w3.org/2000/svg"></svg>
+    <svg id="svgRoot" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%;"></svg>
   </div>
 
   <footer>
-    <span class="hint">Marker werden lokal im Browser gespeichert (localStorage). Für Multi-User-Persistenz siehe Hinweise unten.</span>
+    <span class="hint">Synchronisation mit Google Sheets (feingranulares Upsert pro Marker).</span>
   </footer>
 </div>
 
 <script>
 (function(){
-  const SVG_PATH = 'https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';      // relative Pfad zu deiner großen SVG
-  const STORAGE_KEY = 'markers.v1'; // localStorage Key
-  let mode = 'add';                 // 'add' oder 'select'
-  let svg, vb;                      // svg Element & viewBox {x,y,width,height}
-  let markerLayer;                  // <g> Ebene für Marker
-  let markers = [];                 // Array {id, px, py, label}
+  // === Konfiguration ===
+  const SVG_PATH = 'https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUq4LMZhjRkzG2pwmNrgG1GdLjFi6H3bivz_2SEDYA0m9_lMrPQjxdFmEo0ukgdeCKKA/exec';
+  // Optional: wenn du im Apps Script REQUIRE_TOKEN=true setzt:
+  const TOKEN = null; // z.B. 'GEHEIM'; sonst null lassen
+
+  const STORAGE_KEY = 'markers.v1';
+  const ZOOM_FACTOR = 1.1;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 20;
+  let MARKER_SCALE = 1.0;
+
+  let mode = 'add';
+  let svg, vb, baseViewBox, markerLayer;
+  let markers = [];
+  let isPanning = false, panStart = null, panStartVB = null, spacePressed=false;
 
   const $ = (sel, el=document) => el.querySelector(sel);
-  const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
 
   // UI
   $('#addMode').onclick = () => setMode('add');
   $('#selectMode').onclick = () => setMode('select');
-  $('#exportBtn').onclick = exportJSON;
-  $('#importBtn').onclick = importJSON;
-  $('#clearBtn').onclick = clearAll;
+  $('#clearBtn').onclick = clearAllRemote;
+  $('#reloadBtn').onclick = loadFromSheet;
+  $('#sizeInput').oninput = (e) => { MARKER_SCALE = Math.max(0.1, parseFloat(e.target.value) || 1.0); renderMarkers(); };
 
   setMode('add');
 
-  // SVG laden und inline einfügen (wichtig für Interaktion)
+  // SVG laden
   fetch(SVG_PATH).then(r => r.text()).then(txt => {
     $('#svgRoot').outerHTML = txt
-      .replace('<svg', '<svg id="svgRoot"')
+      .replace('<svg', '<svg id="svgRoot" style="width:100%; height:100%;"')
       .replace('</svg>', '<g id="markerLayer"></g></svg>');
     svg = $('#svgRoot');
     markerLayer = $('#markerLayer');
-    // ViewBox sicherstellen
+
     if (!svg.getAttribute('viewBox')) {
-      // Falls die Quelle keinen viewBox hat, versuchen wir einen zu setzen
       const w = parseFloat(svg.getAttribute('width')) || 1000;
       const h = parseFloat(svg.getAttribute('height')) || 1000;
       svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     }
     const [x,y,w,h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
     vb = {x,y,width:w,height:h};
+    baseViewBox = {...vb};
 
-    // Klick zum Hinzufügen
+    // Interaktion
     svg.addEventListener('click', onSvgClick);
+    svg.addEventListener('wheel', onWheel, {passive:false});
+    svg.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('keydown', (e)=>{ if (e.code==='Space') { spacePressed=true; e.preventDefault(); }});
+    window.addEventListener('keyup', (e)=>{ if (e.code==='Space') { spacePressed=false; }});
+    window.addEventListener('contextmenu', (e)=>{ if (isPanning) e.preventDefault(); });
 
-    // Bestehende Marker laden
-    loadMarkers();
-    renderMarkers();
+    // Laden
+    loadFromSheet().catch(()=>{ loadLocal(); renderMarkers(); });
   });
 
   function setMode(m){
@@ -99,13 +113,11 @@
     $('#selectMode').style.fontWeight = (m==='select') ? '600' : '400';
   }
 
-  // Klick-Position in SVG-UserSpace umrechnen + in Prozent speichern
-  function getSvgPoint(evt) {
-    const pt = (svg.createSVGPoint) ? svg.createSVGPoint() : {x:0,y:0};
+  // --- Koordinaten & Marker ---
+  function clientToSvgPercent(evt) {
+    const pt = svg.createSVGPoint();
     pt.x = evt.clientX; pt.y = evt.clientY;
-    const ctm = svg.getScreenCTM().inverse();
-    const sp = pt.matrixTransform ? pt.matrixTransform(ctm) : pt; // Fallback
-    // Prozent relativ zur viewBox
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
     const px = (sp.x - vb.x) / vb.width * 100;
     const py = (sp.y - vb.y) / vb.height * 100;
     return {px, py};
@@ -113,145 +125,189 @@
 
   function onSvgClick(evt){
     if (mode !== 'add') return;
-    // Klick ignorieren, wenn auf Marker-Layer getroffen (damit nicht doppelt)
     if (evt.target.closest && evt.target.closest('#markerLayer')) return;
-
-    const {px, py} = getSvgPoint(evt);
-    const label = prompt('Optional: Label/Notiz für den Marker (leer lassen möglich)', '') || '';
-    addMarker(px, py, label);
-    saveMarkers();
-    renderMarkers();
+    const {px, py} = clientToSvgPercent(evt);
+    const label = prompt('Optional: Label/Notiz', '') || '';
+    const m = addMarker(px, py, label);
+    renderMarkers(); saveLocal();
+    upsertRemote(m).catch(()=>{}); // sofort ins Sheet
   }
 
-  function addMarker(px, py, label='') {
+  function addMarker(px, py, label=''){
     const id = crypto.randomUUID ? crypto.randomUUID() : 'm'+Date.now()+Math.random();
-    markers.push({id, px, py, label});
+    const m = {id, px, py, label};
+    markers.push(m);
+    return m;
   }
 
   function renderMarkers(){
     markerLayer.innerHTML = '';
+    const baseR = Math.max(baseViewBox.width, baseViewBox.height) * 0.006 * MARKER_SCALE;
     markers.forEach(m => {
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.classList.add('marker');
-      g.setAttribute('data-id', m.id);
-
+      g.classList.add('marker'); g.setAttribute('data-id', m.id);
       const cx = vb.x + (m.px/100)*vb.width;
       const cy = vb.y + (m.py/100)*vb.height;
 
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', cx);
-      circle.setAttribute('cy', cy);
-      circle.setAttribute('r', Math.max(vb.width, vb.height) * 0.006); // skalierbarer Radius
+      circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', baseR);
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', cx);
-      text.setAttribute('y', cy);
+      text.setAttribute('x', cx); text.setAttribute('y', cy);
       text.textContent = m.label || '●';
 
-      g.appendChild(circle);
-      g.appendChild(text);
-      markerLayer.appendChild(g);
+      g.appendChild(circle); g.appendChild(text); markerLayer.appendChild(g);
 
       // Drag & Drop
       let dragging = false;
       g.addEventListener('mousedown', (e) => {
         if (mode !== 'select') return;
-        dragging = true;
-        e.preventDefault();
+        dragging = true; e.preventDefault();
       });
       window.addEventListener('mousemove', (e) => {
         if (!dragging) return;
-        const {px, py} = getSvgPoint(e);
-        m.px = Math.min(100, Math.max(0, px));
-        m.py = Math.min(100, Math.max(0, py));
-        updateMarkerNode(g, m);
+        const p = clientToSvgPercent(e);
+        m.px = Math.min(100, Math.max(0, p.px));
+        m.py = Math.min(100, Math.max(0, p.py));
+        updateMarkerNode(g, m, baseR);
       });
-      window.addEventListener('mouseup', (e) => {
+      window.addEventListener('mouseup', () => {
         if (!dragging) return;
         dragging = false;
-        saveMarkers();
+        saveLocal();
+        upsertRemote(m).catch(()=>{}); // Upsert pro Marker beim Loslassen
       });
 
-      // Löschen (Shift+Klick)
+      // Löschen / Label bearbeiten
       g.addEventListener('click', (e) => {
         if (mode !== 'select') return;
         if (e.shiftKey) {
-          const idx = markers.findIndex(x => x.id === m.id);
-          if (idx >= 0) {
-            markers.splice(idx, 1);
-            saveMarkers();
-            renderMarkers();
-          }
+          markers = markers.filter(x => x.id !== m.id);
+          saveLocal(); renderMarkers();
+          deleteRemote(m.id).catch(()=>{});
         } else if (e.altKey || e.metaKey || e.ctrlKey) {
-          const newLabel = prompt('Label/Notiz bearbeiten', m.label) ?? m.label;
-          m.label = newLabel;
-          saveMarkers();
-          updateMarkerNode(g, m);
+          const newLabel = prompt('Label bearbeiten', m.label) ?? m.label;
+          m.label = newLabel; saveLocal(); updateMarkerNode(g, m, baseR);
+          upsertRemote(m).catch(()=>{});
         }
         e.stopPropagation();
       });
     });
   }
 
-  function updateMarkerNode(g, m){
+  function updateMarkerNode(g, m, rOverride=null){
     const cx = vb.x + (m.px/100)*vb.width;
     const cy = vb.y + (m.py/100)*vb.height;
-    const circle = $('circle', g);
-    const text = $('text', g);
-    circle.setAttribute('cx', cx);
-    circle.setAttribute('cy', cy);
-    text.setAttribute('x', cx);
-    text.setAttribute('y', cy);
+    const circle = g.querySelector('circle');
+    const text = g.querySelector('text');
+    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
+    if (rOverride != null) circle.setAttribute('r', rOverride);
+    text.setAttribute('x', cx); text.setAttribute('y', cy);
     text.textContent = m.label || '●';
   }
 
-  function saveMarkers(){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
+  // --- Zoom & Pan ---
+  function setViewBox(x,y,w,h){
+    vb = {x,y,width:w,height:h};
+    svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+    renderMarkers();
   }
-  function loadMarkers(){
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      markers = raw ? JSON.parse(raw) : [];
-    } catch(e) {
-      markers = [];
+
+  function onWheel(e){
+    e.preventDefault();
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const scale = (e.deltaY < 0) ? (1/ZOOM_FACTOR) : ZOOM_FACTOR;
+    let newW = vb.width * scale;
+    let newH = vb.height * scale;
+
+    const minW = baseViewBox.width / ZOOM_MAX;
+    const maxW = baseViewBox.width / ZOOM_MIN;
+    newW = Math.min(Math.max(newW, minW), maxW);
+    newH = newW * (vb.height / vb.width);
+
+    const kx = (sp.x - vb.x) / vb.width;
+    const ky = (sp.y - vb.y) / vb.height;
+    const newX = sp.x - kx * newW;
+    const newY = sp.y - ky * newH;
+
+    setViewBox(newX, newY, newW, newH);
+  }
+
+  function onMouseDown(e){
+    // Pan: Space + Linksklick ODER Rechtsklick
+    if ((e.button === 0 && spacePressed) || e.button === 2) {
+      isPanning = true;
+      panStart = {x: e.clientX, y: e.clientY};
+      panStartVB = {...vb};
+      e.preventDefault();
     }
   }
-  function exportJSON(){
-    const blob = new Blob([JSON.stringify(markers, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'markers.json'; a.click();
-    URL.revokeObjectURL(url);
+  function onMouseMove(e){
+    if (!isPanning) return;
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    const m = svg.getScreenCTM();
+    const scaleX = vb.width / (m.a * svg.clientWidth);
+    const scaleY = vb.height / (m.d * svg.clientHeight);
+    setViewBox(panStartVB.x - dx*scaleX, panStartVB.y - dy*scaleY, vb.width, vb.height);
   }
-  function importJSON(){
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'application/json';
-    inp.onchange = () => {
-      const file = inp.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const data = JSON.parse(reader.result);
-          if (Array.isArray(data)) {
-            markers = data;
-            saveMarkers();
-            renderMarkers();
-          } else {
-            alert('Ungültiges JSON');
-          }
-        } catch(e) { alert('Fehler beim Lesen der Datei'); }
-      };
-      reader.readAsText(file);
-    };
-    inp.click();
+  function onMouseUp(){ isPanning = false; }
+
+  // --- Persistenz lokal + Sheet ---
+  function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(markers)); }
+  function loadLocal(){
+    try { markers = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch(e){ markers = []; }
   }
-  function clearAll(){
-    if (confirm('Alle Marker löschen?')) {
-      markers = [];
-      saveMarkers();
-      renderMarkers();
-    }
+
+  async function loadFromSheet(){
+    const url = WEB_APP_URL + (TOKEN ? `?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}` : `?t=${Date.now()}`);
+    const res = await fetch(url, {method:'GET'});
+    if (!res.ok) throw new Error('GET failed');
+    const data = await res.json();
+    markers = Array.isArray(data.markers) ? data.markers.map(m => ({
+      id: m.id, px: Number(m.px), py: Number(m.py), label: m.label || ''
+    })) : [];
+    saveLocal();
+    renderMarkers();
+  }
+
+  function formBody(params){
+    const p = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => p.set(k, v));
+    if (TOKEN) p.set('token', TOKEN);
+    return p.toString();
+  }
+
+  async function upsertRemote(m){
+    const res = await fetch(WEB_APP_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: formBody({ action:'upsert', payload: JSON.stringify(m) })
+    });
+    if (!res.ok) throw new Error('upsert failed');
+  }
+
+  async function deleteRemote(id){
+    const res = await fetch(WEB_APP_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: formBody({ action:'delete', payload: JSON.stringify({id}) })
+    });
+    if (!res.ok) throw new Error('delete failed');
+  }
+
+  async function clearAllRemote(){
+    if (!confirm('Alle Marker im Sheet löschen?')) return;
+    const res = await fetch(WEB_APP_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: formBody({ action:'clearAll' })
+    });
+    if (!res.ok) { alert('Löschen fehlgeschlagen'); return; }
+    markers = []; saveLocal(); renderMarkers();
   }
 
 })();
