@@ -16,10 +16,13 @@
       --border-glow: #ff6a00;
       --text-main: #f0e6d8;
       --text-dim: #b7a999;
-      --marker-fill: rgba(255,60,0,0.9);
+
+      --marker-fill: rgba(255,60,0,0.9); /* normales Orange/Blut */
       --marker-stroke: #ff6a00;
-      --marker-highlight-fill: #FF00FB; /* zartes Pink (Hotpink) */
-      --marker-highlight-stroke: #ff69b4;              /* Pink stroke */
+
+      /* Pinker Highlight-Glow */
+      --marker-highlight-fill: rgba(255,105,180,0.35);
+      --marker-highlight-stroke: #ff69b4;
     }
 
     html, body {
@@ -36,7 +39,7 @@
       min-height:100vh;
     }
 
-    /* === Header === */
+    /* Header */
     header {
       padding:8px 16px;
       background:var(--bg-panel);
@@ -64,7 +67,7 @@
       max-width:600px;
     }
 
-    /* === Brandbereich rechts === */
+    /* Brand rechts */
     #brand {
       display:flex;
       align-items:center;
@@ -102,7 +105,7 @@
       92%, 95%, 100% { opacity:1; }
     }
 
-    /* === Main Layout === */
+    /* Layout */
     #main {
       flex:1;
       display:flex;
@@ -130,7 +133,6 @@
       touch-action:none;
     }
 
-    /* === History === */
     #history {
       width:240px;
       flex:none;
@@ -169,6 +171,7 @@
       background:rgba(255,106,0,0.07);
       box-shadow:0 0 6px rgba(255,106,0,0.3);
       transition:background .1s, box-shadow .1s;
+      color:var(--text-main);
     }
     .historyItem:hover {
       background:rgba(255,106,0,0.15);
@@ -181,12 +184,12 @@
       stroke-width:1;
       fill:var(--marker-fill);
       filter: drop-shadow(0 0 4px rgba(255,106,0,0.8));
-      transition:fill .1s, stroke .1s, stroke-width .1s;
+      transition:fill .1s, stroke .1s, stroke-width .1s, filter .1s;
     }
 
-      .marker.highlight circle {
-      fill: var(--marker-highlight-fill);
-      stroke: var(--marker-highlight-stroke);
+    .marker.highlight circle {
+      fill:var(--marker-highlight-fill);
+      stroke:var(--marker-highlight-stroke);
       stroke-width:3;
       filter: drop-shadow(0 0 8px rgba(255,105,180,0.8)); /* pink glow */
     }
@@ -231,44 +234,69 @@
 
 <script>
 (function(){
-  // === Konfiguration ===
+  // === KONFIG ===
   const SVG_PATH='https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';
 
-  // Google Apps Script Endpoint (dein Web-App-URL)
+  // Deine Apps-Script Web-App URL
   const WEB_APP_URL='https://script.google.com/macros/s/AKfycbyUq4LMZhjRkzG2pwmNrgG1GdLjFi6H3bivz_2SEDYA0m9_lMrPQjxdFmEo0ukgdeCKKA/exec';
 
-  // Falls du irgendwann einen Token brauchst:
-  const TOKEN = null; // z.B. "GEHEIM", sonst null
+  // Falls du Token-Schutz im Script aktivierst:
+  const TOKEN = null; // oder z.B. "GEHEIMWERT"
 
-  // Lokaler Fallback-Speicher
   const STORAGE_KEY='markers.v1';
 
   const ZOOM_FACTOR=1.4;
   const ZOOM_MAX=20;
 
-  // Markergröße skaliert mit Zoom:
-  const SCALE_OUT=0.8; // draußen
-  const SCALE_IN =0.1; // voll drin
+  // Marker-Size lerp:
+  const SCALE_OUT=0.8; // rausgezoomt
+  const SCALE_IN =0.1; // maximal reingezoomt
 
-  // State
+  // STATE
   let svg, markerLayer;
-  let vb;          // {x,y,width,height} aktuelle ViewBox
-  let baseViewBox; // {x,y,width,height} ganze Karte
+  let vb;          // aktuelle ViewBox {x,y,width,height}
+  let baseViewBox; // gesamte Karte
   let isPanning=false;
   let panStart=null;
   let panStartVB=null;
   let spacePressed=false;
 
-  // Marker-Daten
-  // { id, px, py, visible (bool), createdAt }
+  // Marker-Struktur:
+  // {
+  //   uid: "m_xxx"    (random unique, speicher-key)
+  //   displayId: "0001" (laufende Anzeige-ID für History)
+  //   px, py: Prozent auf Karte
+  //   visible: true/false
+  //   createdAt: timestamp
+  // }
   let markers=[];
-  let markerDomMap={};
-  let nextId=1; // läuft hoch: "0001", "0002", ...
+  let markerDomMap={}; // uid -> SVG <g>
 
+  // Counter für displayId
+  let nextDisplayIdNum=1;
+
+  // Hilfsfunktionen
   const $=(sel,root=document)=>root.querySelector(sel);
-  const getNextId=()=>String(nextId++).padStart(4,'0');
 
-  // ---- Initial Load ----
+  function genUid(){
+    // ziemlich eindeutige clientseitige ID
+    return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+  }
+
+  function getNextDisplayId(){
+    const s = String(nextDisplayIdNum).padStart(4,'0');
+    nextDisplayIdNum++;
+    return s;
+  }
+
+  function updateNextDisplayIdFromMarkers(){
+    const nums = markers
+      .map(m => parseInt(m.displayId,10))
+      .filter(n => !isNaN(n));
+    nextDisplayIdNum = (nums.length ? Math.max(...nums)+1 : 1);
+  }
+
+  // ====== INITIAL SETUP ======
   fetch(SVG_PATH).then(r=>r.text()).then(txt=>{
     $('#svgRoot').outerHTML = txt
       .replace('<svg','<svg id="svgRoot" style="width:100%;height:100%;touch-action:none;background:#000;"')
@@ -277,7 +305,7 @@
     svg = $('#svgRoot');
     markerLayer = $('#markerLayer');
 
-    // Kontextmenü auf Karte deaktivieren
+    // Kontextmenü auf Karte aus
     $('#stage').addEventListener('contextmenu', e=>e.preventDefault());
     svg.addEventListener('contextmenu', e=>e.preventDefault());
 
@@ -293,9 +321,9 @@
       baseViewBox = {...vb};
     }
 
-    // Interaktionen
-    svg.addEventListener('click', onSvgClickAdd);               // Shift+Linksklick -> neuer Marker
-    svg.addEventListener('wheel', onWheel, {passive:false});    // Zoomen
+    // Event-Listener
+    svg.addEventListener('click', onSvgClickAdd);               // Shift + Linksklick -> Marker neu
+    svg.addEventListener('wheel', onWheel, {passive:false});    // Zoom
     svg.addEventListener('mousedown', onMouseDownPanOrDragStart);
     window.addEventListener('mousemove', onMouseMoveAll);
     window.addEventListener('mouseup', onMouseUpAll);
@@ -312,24 +340,25 @@
       }
     });
 
-    // Erst versuchen vom Sheet zu laden,
-    // wenn das fehlschlägt: localStorage nutzen
+    // Daten holen:
+    // 1. Versuch: Sheet
     loadFromSheet().catch(()=>{
+      // fallback: local
       loadLocal();
-      updateNextIdFromMarkers();
+      updateNextDisplayIdFromMarkers();
       renderMarkers();
       rebuildHistory();
     });
   });
 
-  // ---------- ViewBox Helpers (Zoom / Pan) ----------
+  // ====== VIEWBOX / ZOOM / PAN ======
 
   function clampViewBox(x,y,width,height){
-    // Begrenze Zoom-Out auf volle Karte
+    // nicht weiter raus als Ganze Karte
     if (width  > baseViewBox.width)  width  = baseViewBox.width;
     if (height > baseViewBox.height) height = baseViewBox.height;
 
-    // Begrenze Pan auf Kartenbereich
+    // nicht raus pannen
     const minX = baseViewBox.x;
     const maxX = baseViewBox.x + baseViewBox.width  - width;
     const minY = baseViewBox.y;
@@ -343,8 +372,6 @@
     return {x,y,width,height};
   }
 
-  // Setzt die ViewBox wirklich ins SVG
-  // rerender=true -> Marker neu zeichnen (Größe abhängig vom Zoom)
   function setViewBox(newVB, {rerender}){
     vb = newVB;
     svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.width} ${vb.height}`);
@@ -354,9 +381,8 @@
     }
   }
 
-  // ---------- Koordinaten / Radius ----------
+  // ====== KOORDINATEN / RADIUS ======
 
-  // Bildschirm -> % der gesamten Karte
   function clientToBasePercent(evt){
     const pt = svg.createSVGPoint();
     pt.x = evt.clientX;
@@ -372,7 +398,6 @@
     };
   }
 
-  // % -> absolute Koordinaten in der Karten-SVG
   function percentToAbsXY(m){
     return {
       absX: baseViewBox.x + (m.px/100)*baseViewBox.width,
@@ -380,27 +405,27 @@
     };
   }
 
-  // Marker-Radius dynamisch je Zoom
   function getCurrentMarkerRadius(){
-    // zoomFactor = wie stark reingezoomt bin ich gerade?
-    const zoomFactor = baseViewBox.width / vb.width; // 1 .. ZOOM_MAX
-    const t = (zoomFactor - 1) / (ZOOM_MAX - 1);     // 0 .. 1
-    const scaleNow = SCALE_OUT*(1 - t) + SCALE_IN*t; // linear interpoliert
+    // zoomFactor: 1 (raus) .. ZOOM_MAX (rein)
+    const zoomFactor = baseViewBox.width / vb.width;
+    const t = (zoomFactor - 1) / (ZOOM_MAX - 1); // 0..1
+    const scaleNow = SCALE_OUT*(1 - t) + SCALE_IN*t;
     const baseLen = Math.max(baseViewBox.width, baseViewBox.height);
     return baseLen * 0.006 * scaleNow;
   }
 
-  // ---------- Marker Logik ----------
+  // ====== MARKER: ERSTELLEN / RENDERN / INTERAKTION ======
 
-  // Shift+Linksklick auf freie Karte => Marker erstellen
   function onSvgClickAdd(evt){
     if (!evt.shiftKey) return;
-    if (evt.target.closest && evt.target.closest('#markerLayer')) return; // nicht auf bestehenden Marker
+    // nicht doppelt erstellen, wenn direkt auf Marker geklickt wurde
+    if (evt.target.closest && evt.target.closest('#markerLayer')) return;
 
     const {px,py} = clientToBasePercent(evt);
 
     const m = {
-      id: getNextId(),
+      uid: genUid(),
+      displayId: getNextDisplayId(),
       px,
       py,
       visible: true,
@@ -409,12 +434,11 @@
 
     markers.push(m);
     saveLocal();
-    upsertRemote(m); // <-- direkt ins Sheet pushen
+    upsertRemote(m);
     renderMarkers();
     rebuildHistory();
   }
 
-  // Marker zeichnen
   function renderMarkers(){
     if (!markerLayer) return;
     markerLayer.innerHTML = '';
@@ -429,7 +453,7 @@
 
         const g = document.createElementNS('http://www.w3.org/2000/svg','g');
         g.classList.add('marker');
-        g.setAttribute('data-id',m.id);
+        g.setAttribute('data-uid',m.uid);
 
         const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
         circle.setAttribute('cx',absX);
@@ -439,14 +463,14 @@
         g.appendChild(circle);
         markerLayer.appendChild(g);
 
-        markerDomMap[m.id] = g;
+        markerDomMap[m.uid] = g;
         attachMarkerInteraction(g,m);
       });
   }
 
-  // Marker Interaktion:
-  // - Linksklick halten = verschieben
-  // - Shift+Rechtsklick = "löschen" (visible=false)
+  // Marker-Verhalten:
+  // - Linksklick halten (ohne Shift): Drag
+  // - Shift+Rechtsklick: ausblenden (visible=false)
   function attachMarkerInteraction(g,m){
     let dragging=false;
 
@@ -456,30 +480,27 @@
         dragging=true;
         e.preventDefault();
       }
-
       // Ausblenden
       if(e.button===2 && e.shiftKey){
         e.preventDefault();
         m.visible=false;
         saveLocal();
-        upsertRemote(m); // sync hide
+        upsertRemote(m);
         renderMarkers();
         rebuildHistory();
       }
     });
 
-    // intern merken für global mousemove/mouseup
-    g._dragMarkerRef = m;
-    g._isDragging    = () => dragging;
-    g._stopDragging  = () => { dragging=false; };
+    g._dragUid      = m.uid;
+    g._isDragging   = () => dragging;
+    g._stopDragging = () => { dragging=false; };
   }
 
-  // Marker wird gerade verschoben -> live Position updaten
   function dragMoveMarkerIfNeeded(evt){
-    for(const id in markerDomMap){
-      const g = markerDomMap[id];
-      const m = markers.find(mm=>mm.id===id);
-      if(!m || !g._isDragging || !g._isDragging()) continue;
+    for(const uid in markerDomMap){
+      const g = markerDomMap[uid];
+      const m = markers.find(mm=>mm.uid===uid);
+      if (!m || !g._isDragging || !g._isDragging()) continue;
 
       const p = clientToBasePercent(evt);
       m.px = p.px;
@@ -492,22 +513,21 @@
     }
   }
 
-  // Drag Ende -> speichern + Sheet updaten
   function dragStopIfNeeded(){
-    for(const id in markerDomMap){
-      const g = markerDomMap[id];
-      const m = markers.find(mm=>mm.id===id);
-      if(!m || !g._isDragging || !g._isDragging()) continue;
+    for(const uid in markerDomMap){
+      const g = markerDomMap[uid];
+      const m = markers.find(mm=>mm.uid===uid);
+      if (!m || !g._isDragging || !g._isDragging()) continue;
 
       g._stopDragging();
       saveLocal();
-      upsertRemote(m); // sync neuer Standort
+      upsertRemote(m);
       renderMarkers();
       rebuildHistory();
     }
   }
 
-  // ---------- History rechts ----------
+  // ====== HISTORY ======
 
   function rebuildHistory(){
     const list = $('#historyList');
@@ -521,41 +541,41 @@
       .forEach(m=>{
         const item = document.createElement('div');
         item.className='historyItem';
-        item.textContent='Marker '+m.id;
-        item.dataset.id=m.id;
+        item.textContent='Marker ' + m.displayId;
+        item.dataset.uid = m.uid;
 
         let held=false;
 
         item.addEventListener('mousedown', e=>{
           if(e.button!==0) return;
           held=true;
-          highlightMarker(m.id,true);
+          highlightMarker(m.uid,true);
           e.preventDefault();
         });
 
         window.addEventListener('mouseup', ()=>{
           if(!held) return;
           held=false;
-          highlightMarker(m.id,false);
+          highlightMarker(m.uid,false);
         });
 
         list.appendChild(item);
       });
   }
 
-  function highlightMarker(id,on){
-    const g = markerDomMap[id];
+  function highlightMarker(uid,on){
+    const g = markerDomMap[uid];
     if(!g)return;
     if(on) g.classList.add('highlight');
     else   g.classList.remove('highlight');
   }
 
-  // ---------- Zoom ----------
+  // ====== ZOOM ======
 
   function onWheel(e){
     e.preventDefault();
 
-    // Position unter Maus als Zoom-Anker
+    // Punkt unter der Maus als Zoom-Zentrum
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
@@ -563,49 +583,47 @@
 
     const scale = (e.deltaY<0) ? (1/ZOOM_FACTOR) : ZOOM_FACTOR;
 
-    let newWidth  = vb.width  * scale;
-    let newHeight = vb.height * scale;
+    let newW = vb.width  * scale;
+    let newH = vb.height * scale;
 
-    // hartes Minimum = maximaler Zoom in die Karte
-    const minWidth  = baseViewBox.width  / ZOOM_MAX;
-    const minHeight = baseViewBox.height / ZOOM_MAX;
-    if (newWidth  < minWidth ) newWidth  = minWidth;
-    if (newHeight < minHeight) newHeight = minHeight;
+    // Minimum (maximal rein)
+    const minW = baseViewBox.width  / ZOOM_MAX;
+    const minH = baseViewBox.height / ZOOM_MAX;
+    if (newW < minW) newW = minW;
+    if (newH < minH) newH = minH;
 
-    // nicht weiter als ganze Karte rauszoomen
-    if (newWidth  > baseViewBox.width ) newWidth  = baseViewBox.width;
-    if (newHeight > baseViewBox.height) newHeight = baseViewBox.height;
+    // Maximum (komplett raus)
+    if (newW > baseViewBox.width ) newW = baseViewBox.width;
+    if (newH > baseViewBox.height) newH = baseViewBox.height;
 
-    // Halte Fokuspunkt unter der Maus beim Zoomen an derselben Stelle
-    const kx = (sp.x - vb.x) / vb.width;
-    const ky = (sp.y - vb.y) / vb.height;
-    const newX = sp.x - kx * newWidth;
-    const newY = sp.y - ky * newHeight;
+    // Neue obere linke Ecke so, dass der Mauspunkt stehen bleibt
+    const kx=(sp.x - vb.x)/vb.width;
+    const ky=(sp.y - vb.y)/vb.height;
+    const newX = sp.x - kx*newW;
+    const newY = sp.y - ky*newH;
 
-    const clamped = clampViewBox(newX,newY,newWidth,newHeight);
+    const clamped = clampViewBox(newX,newY,newW,newH);
 
-    // Zoom ändert Markergröße => rerender:true
-    setViewBox(clamped, {rerender:true});
+    // Zoom -> Markergröße ändert sich -> rerender
+    setViewBox(clamped,{rerender:true});
   }
 
-  // ---------- Pan / global Drag ----------
+  // ====== PAN / GLOBAL MOUSE ======
 
   function onMouseDownPanOrDragStart(e){
-    // Pan aktivieren mit:
-    // - Space + Linksklick
-    // - oder Rechtsklick (ohne Shift)
+    // Pan-Modus: Space+LMB oder RMB ohne Shift
     if ((e.button===0 && spacePressed) ||
         (e.button===2 && !e.shiftKey)) {
 
       isPanning=true;
       panStart   ={x:e.clientX,y:e.clientY};
-      panStartVB ={...vb}; // Snapshot
+      panStartVB ={...vb};
       e.preventDefault();
     }
   }
 
   function onMouseMoveAll(e){
-    // Falls gerade ein Marker bewegt wird:
+    // Falls gerade Marker verschoben wird
     dragMoveMarkerIfNeeded(e);
 
     if (!isPanning) return;
@@ -613,7 +631,6 @@
     const dx = e.clientX - panStart.x;
     const dy = e.clientY - panStart.y;
 
-    // Bildschirmpixel -> SVG-Koordinatenverschiebung
     const m = svg.getScreenCTM();
     const scaleX = vb.width  / (m.a * svg.clientWidth);
     const scaleY = vb.height / (m.d * svg.clientHeight);
@@ -623,8 +640,8 @@
 
     const clamped = clampViewBox(newX,newY,vb.width,vb.height);
 
-    // Pan ändert nur x/y, Markergröße bleibt gleich => rerender:false
-    setViewBox(clamped, {rerender:false});
+    // Pan ändert nur x,y, nicht width/height -> Markergröße bleibt gleich
+    setViewBox(clamped,{rerender:false});
   }
 
   function onMouseUpAll(){
@@ -632,7 +649,7 @@
     dragStopIfNeeded();
   }
 
-  // ---------- Local Storage ----------
+  // ====== LOCAL STORAGE ======
 
   function saveLocal(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
@@ -646,18 +663,17 @@
     }
   }
 
-  function updateNextIdFromMarkers(){
+  function updateNextDisplayIdFromMarkers(){
     const nums = markers
-      .map(m=>parseInt(m.id,10))
-      .filter(n=>!isNaN(n));
-    nextId = (nums.length ? Math.max(...nums)+1 : 1);
+      .map(m => parseInt(m.displayId,10))
+      .filter(n => !isNaN(n));
+    nextDisplayIdNum = (nums.length ? Math.max(...nums)+1 : 1);
   }
 
-  // ---------- Sheet Sync ----------
+  // ====== SHEET SYNC ======
 
-  // Lädt alle Marker aus dem Sheet
+  // Marker vom Sheet laden
   async function loadFromSheet(){
-    // optional Token anfügen (falls dein Script das erwartet/später absichert)
     const qs = TOKEN
       ? `?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}`
       : `?t=${Date.now()}`;
@@ -667,25 +683,27 @@
 
     const data = await res.json();
 
-    // Erwartet: data.markers = Array von Objekten aus Sheet
+    // Erwartet vom Script:
+    // { markers: [ {uid, displayId, px, py, visible, createdAt, ...}, ... ] }
     markers = Array.isArray(data.markers)
       ? data.markers.map(m => ({
-          id: m.id,
-          px: Number(m.px),
-          py: Number(m.py),
-          // visible aus Sheet kann sein: true, "TRUE", 1, "1"
-          visible: (m.visible === true || m.visible === "TRUE" || m.visible === 1 || m.visible === "1"),
-          createdAt: m.createdAt ? Number(m.createdAt) : Date.now()
+          uid:        m.uid,
+          displayId:  m.displayId,
+          px:         Number(m.px),
+          py:         Number(m.py),
+          visible:    (m.visible === true || m.visible === "TRUE" || m.visible === 1 || m.visible === "1"),
+          createdAt:  m.createdAt ? Number(m.createdAt) : Date.now()
         }))
       : [];
 
-    updateNextIdFromMarkers();
+    updateNextDisplayIdFromMarkers();
     saveLocal();
+
     renderMarkers();
     rebuildHistory();
   }
 
-  // Baut Body für POST
+  // Hilfsfunktion um POST-Body zu bauen
   function formBody(params){
     const p = new URLSearchParams();
     Object.entries(params).forEach(([k,v]) => p.set(k, v));
@@ -693,25 +711,24 @@
     return p.toString();
   }
 
-  // Schickt einen Marker ans Sheet (upsert)
+  // Einzelnen Marker ans Sheet schicken (upsert über uid)
   function upsertRemote(m){
-    // Wir schicken sichtbare Felder als JSON-String 'payload'
-    // sichtbar ist Boolean `true/false`
     fetch(WEB_APP_URL, {
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body: formBody({
         action: 'upsert',
         payload: JSON.stringify({
-          id: m.id,
-          px: m.px,
-          py: m.py,
-          label: "",             // legacy Feld, leer lassen
-          visible: m.visible,    // Boolean!
-          createdAt: m.createdAt || Date.now()
+          uid:        m.uid,
+          displayId:  m.displayId,
+          px:         m.px,
+          py:         m.py,
+          label:      "",               // wir nutzen aktuell kein Label
+          visible:    m.visible,        // Boolean true/false
+          createdAt:  m.createdAt || Date.now()
         })
       })
-    }).catch(()=>{/* offline ist ok */});
+    }).catch(()=>{ /* offline? dann bleibt nur localStorage */ });
   }
 
 })();
