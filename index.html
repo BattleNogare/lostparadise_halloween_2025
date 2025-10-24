@@ -19,7 +19,7 @@
       --shadow-glow: 0 0 20px rgba(255,106,0,0.4);
       --shadow-box: 0 0 20px rgba(0,0,0,0.8);
       --history-hover: rgba(255,106,0,0.1);
-      --marker-fill: rgba(255,60,0,0.9);        /* blutiges Orange/Rot */
+      --marker-fill: rgba(255,60,0,0.9);
       --marker-stroke: #ff6a00;
       --marker-highlight-fill: rgba(255,255,120,0.4);
       --marker-highlight-stroke: #fff38a;
@@ -60,7 +60,7 @@
       gap:12px;
       align-items:center;
       flex-wrap:wrap;
-      max-width:calc(100% - 60px);
+      max-width:calc(100% - 200px); /* etwas mehr Platz rechts für Brand */
     }
 
     .hint {
@@ -70,19 +70,62 @@
       max-width:600px;
     }
 
-    /* Logo rechts oben */
+    /* Logo + Neontext rechts */
+    #brand {
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      justify-content:center;
+      flex:none;
+      min-width:160px;
+      text-align:right;
+      line-height:1.2;
+      filter: drop-shadow(0 0 8px rgba(255,106,0,0.6));
+    }
+
     #logo {
       display:flex;
       align-items:center;
-      justify-content:center;
+      justify-content:flex-end;
       height:40px;
-      flex:none;
-      filter: drop-shadow(0 0 8px rgba(255,106,0,0.6));
     }
     #logo img {
       height:40px;
       width:auto;
       display:block;
+    }
+
+    .neonText {
+      margin-top:4px;
+      font-size:0.75rem;
+      font-weight:600;
+      color:var(--border-glow);
+      text-shadow:
+        0 0 4px rgba(255,106,0,0.9),
+        0 0 8px rgba(255,106,0,0.6),
+        0 0 16px rgba(255,106,0,0.4);
+      letter-spacing:0.03em;
+      animation: flicker 2.8s infinite steps(1);
+      white-space:nowrap;
+    }
+
+    /* leicht unruhiges Neon-Flicker */
+    @keyframes flicker {
+      0%   { opacity:1;   text-shadow:0 0 4px rgba(255,106,0,1),0 0 8px rgba(255,106,0,0.8),0 0 16px rgba(255,106,0,0.6),0 0 32px rgba(255,106,0,0.4);}
+      8%   { opacity:0.8; text-shadow:0 0 2px rgba(255,106,0,1),0 0 4px rgba(255,106,0,0.7),0 0 8px rgba(255,106,0,0.5);}
+      10%  { opacity:1;   text-shadow:0 0 4px rgba(255,106,0,1),0 0 8px rgba(255,106,0,0.9),0 0 16px rgba(255,106,0,0.7),0 0 32px rgba(255,106,0,0.5);}
+      12%  { opacity:0.4; text-shadow:none; }
+      13%  { opacity:1;   text-shadow:0 0 4px rgba(255,106,0,1),0 0 8px rgba(255,106,0,0.8),0 0 16px rgba(255,106,0,0.6),0 0 32px rgba(255,106,0,0.4);}
+      20%  { opacity:1; }
+      21%  { opacity:0.5; text-shadow:0 0 2px rgba(255,106,0,0.6),0 0 4px rgba(255,106,0,0.4);}
+      22%  { opacity:1;   text-shadow:0 0 4px rgba(255,106,0,1),0 0 8px rgba(255,106,0,0.9),0 0 16px rgba(255,106,0,0.7);}
+      60%  { opacity:1; }
+      61%  { opacity:0.6; text-shadow:0 0 2px rgba(255,106,0,0.5),0 0 3px rgba(255,106,0,0.3);}
+      62%  { opacity:1;   text-shadow:0 0 4px rgba(255,106,0,1),0 0 8px rgba(255,106,0,0.7),0 0 16px rgba(255,106,0,0.5);}
+      90%  { opacity:1; }
+      91%  { opacity:0.3; text-shadow:none; }
+      92%  { opacity:1;   text-shadow:0 0 4px rgba(255,106,0,1),0 0 8px rgba(255,106,0,0.8),0 0 16px rgba(255,106,0,0.6),0 0 32px rgba(255,106,0,0.4);}
+      100% { opacity:1; }
     }
 
     /* Hauptbereich */
@@ -93,6 +136,7 @@
       padding:12px;
       gap:12px;
       box-sizing:border-box;
+      color:var(--text-main);
     }
 
     /* Map Wrapper */
@@ -112,13 +156,15 @@
       max-height:80vh;
       max-width:100%;
       position:relative;
-      box-shadow:0 0 30px rgba(255,106,0,0.2), var(--shadow-box);
+      box-shadow:
+        0 0 30px rgba(255,106,0,0.2),
+        var(--shadow-box);
     }
 
     #svgRoot {
       width:100%;
       height:100%;
-      background:#000; /* Karte selber schwarz dahinter */
+      background:#000;
       touch-action:none;
     }
 
@@ -133,7 +179,9 @@
       border-radius:8px;
       background:var(--bg-panel);
       max-height:80vh;
-      box-shadow:0 0 30px rgba(255,106,0,0.2), var(--shadow-box);
+      box-shadow:
+        0 0 30px rgba(255,106,0,0.2),
+        var(--shadow-box);
       font-size:0.9rem;
       line-height:1.4;
       color:var(--text-main);
@@ -203,6 +251,13 @@
     #markerLayer { pointer-events:none; }
     #markerLayer > g { pointer-events:auto; }
 
+    .hint a {
+      color: var(--border-glow);
+      text-decoration: none;
+    }
+    .hint a:hover {
+      text-shadow:0 0 6px rgba(255,106,0,0.8);
+    }
   </style>
 </head>
 <body>
@@ -219,8 +274,11 @@
       </div>
     </div>
 
-    <div id="logo">
-      <img src="https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/halloween.png" alt="Halloween Logo">
+    <div id="brand">
+      <div id="logo">
+        <img src="https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/halloween.png" alt="Halloween Logo">
+      </div>
+      <div class="neonText">Lostparadise - Halloween-Event</div>
     </div>
   </header>
 
@@ -249,7 +307,7 @@
   const ZOOM_FACTOR=1.4;
   const ZOOM_MAX=20;
 
-  // 👇 Deine gewünschte Skalierung
+  // Skalierung je Zoomstufe (dein Wunschwert)
   const SCALE_OUT=0.8;
   const SCALE_IN=0.1;
 
@@ -276,12 +334,12 @@
     svg=$('#svgRoot');
     markerLayer=$('#markerLayer');
 
-    // Kontextmenü überall über der Karte killen
+    // Kontextmenü über Karte aus
     const stageEl=document.getElementById('stage');
     stageEl.addEventListener('contextmenu',e=>e.preventDefault());
     svg.addEventListener('contextmenu',e=>e.preventDefault());
 
-    // ViewBox sichern
+    // ViewBox initialisieren
     if(!svg.getAttribute('viewBox')){
       const w=parseFloat(svg.getAttribute('width'))||1000;
       const h=parseFloat(svg.getAttribute('height'))||1000;
@@ -291,7 +349,7 @@
     vb={x,y,width:w,height:h};
     baseViewBox={...vb};
 
-    // Events
+    // Interaktionen
     svg.addEventListener('click',onSvgClickAdd); // Shift+Linksklick -> neuer Marker
     svg.addEventListener('wheel',onWheel,{passive:false});
     svg.addEventListener('mousedown',onMouseDownPanOrMarkerStart);
@@ -310,7 +368,7 @@
       }
     });
 
-    // Daten laden
+    // Marker-Daten holen
     loadFromSheet().catch(()=>{
       loadLocal();
       updateNextIdFromMarkers();
@@ -318,7 +376,7 @@
     });
   });
 
-  // Hilfsfunktion: nextIdNumber nachladen
+  // Nach Laden IDs fortsetzen
   function updateNextIdFromMarkers(){
     const nums=markers
       .map(m=>parseInt(m.id,10))
@@ -326,7 +384,7 @@
     nextIdNumber=(nums.length?Math.max(...nums)+1:1);
   }
 
-  // Koordinaten-Konvertierung
+  // Koordinaten helpers
   function clientToBasePercent(evt){
     const pt=svg.createSVGPoint();
     pt.x=evt.clientX;pt.y=evt.clientY;
@@ -345,20 +403,21 @@
     };
   }
 
-  // Marker-Radius dynamisch nach Zoom
+  // Marker-Radius basierend auf Zoom
   function getCurrentMarkerRadius(){
     const zoomFactor=baseViewBox.width/vb.width; // 1 .. ZOOM_MAX
     const t=(zoomFactor-1)/(ZOOM_MAX-1);         // 0 .. 1
-    const scaleNow=SCALE_OUT*(1-t)+SCALE_IN*t;   // lerp zwischen OUT und IN
+    const scaleNow=SCALE_OUT*(1-t)+SCALE_IN*t;   // linear zwischen OUT und IN
     const baseLen=Math.max(baseViewBox.width,baseViewBox.height);
     return baseLen*0.006*scaleNow;
   }
 
-  // Shift + Linksklick -> Marker setzen
+  // Shift + Linksklick (auf freie Stelle) -> neuen Marker setzen
   function onSvgClickAdd(evt){
     if(!evt.shiftKey)return;
-    // Nicht doppelt erstellen, wenn man auf Marker klickt
+    // wenn auf Marker geklickt wurde -> keinen neuen erstellen
     if(evt.target.closest && evt.target.closest('#markerLayer')) return;
+
     const {px,py}=clientToBasePercent(evt);
     const m=createMarker(px,py);
     saveLocal();
@@ -402,7 +461,6 @@
         markerLayer.appendChild(g);
 
         markerDomMap[m.id]=g;
-
         attachMarkerInteractions(g,m);
       });
 
@@ -416,12 +474,12 @@
     let dragging=false;
 
     g.addEventListener('mousedown',e=>{
-      // Linke Taste ohne Shift -> Drag starten
+      // Linksklick ohne Shift -> Drag
       if(e.button===0 && !e.shiftKey){
         dragging=true;
         e.preventDefault();
       }
-      // Rechte Taste mit Shift -> ausblenden
+      // Rechtsklick + Shift -> ausblenden
       if(e.button===2 && e.shiftKey){
         e.preventDefault();
         m.visible=false;
@@ -436,7 +494,7 @@
     g._stopDragging=()=>{dragging=false;};
   }
 
-  // Drag Bewegung in Echtzeit
+  // Drag live updaten
   function dragMoveMarkerIfNeeded(evt){
     for(const id in markerDomMap){
       const g=markerDomMap[id];
@@ -468,9 +526,8 @@
     }
   }
 
-  // History rechts
-  // zeigt nur sichtbare Marker, neueste oben
-  // Klick halten => Highlight
+  // History rechts (sichtbare Marker, neueste zuerst)
+  // Klick halten auf Eintrag -> Marker highlighten
   function rebuildHistory(){
     const list=$('#historyList');
     list.innerHTML='';
@@ -511,7 +568,7 @@
     else g.classList.remove('highlight');
   }
 
-  // Pan & Zoom mit Begrenzung
+  // Pan & Zoom
   function clampAndSetViewBox(x,y,w,h){
     // Rauszoomen begrenzen
     if(w>baseViewBox.width) w=baseViewBox.width;
@@ -533,7 +590,7 @@
     vb={x,y,width:w,height:h};
     svg.setAttribute('viewBox',`${x} ${y} ${w} ${h}`);
 
-    // bei Zoom neu rendern -> passt Radius an
+    // Bei Zoom (sizeChanged true) -> Marker neu rendern für neue Größe
     if(sizeChanged){
       renderMarkers();
     }
@@ -550,13 +607,13 @@
     let newW=vb.width*scale;
     let newH=vb.height*scale;
 
-    // max rein
+    // Max rein
     const minW=baseViewBox.width/ZOOM_MAX;
     const minH=baseViewBox.height/ZOOM_MAX;
     if(newW<minW)newW=minW;
     if(newH<minH)newH=minH;
 
-    // max raus
+    // Max raus
     const maxW=baseViewBox.width;
     const maxH=baseViewBox.height;
     if(newW>maxW)newW=maxW;
@@ -584,10 +641,10 @@
   }
 
   function onMouseMoveAll(e){
-    // Markerdrag live
+    // Markerdrag live bewegen
     dragMoveMarkerIfNeeded(e);
 
-    // Pan?
+    // Panning bewegen
     if(!isPanning)return;
 
     const dx=e.clientX-panStart.x;
@@ -600,7 +657,7 @@
     const newX=panStartVB.x-dx*scaleX;
     const newY=panStartVB.y-dy*scaleY;
 
-    // Nur Pan -> Größe ändert sich nicht, renderMarkers nicht nötig hier
+    // Bei Pan ändert sich Zoom nicht -> sizeChanged=false -> kein Re-render nötig
     clampAndSetViewBox(newX,newY,vb.width,vb.height);
   }
 
@@ -651,11 +708,10 @@
   }
 
   function upsertRemote(m){
-    // bool visible direkt mitspeichern
     fetch(WEB_APP_URL,{
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:formBody({
+      body: formBody({
         action:'upsert',
         payload: JSON.stringify({
           id:m.id,
