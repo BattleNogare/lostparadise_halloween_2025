@@ -31,27 +31,37 @@
       display:flex;
       align-items:center;
       justify-content:space-between;
+      flex-wrap:wrap;
+      row-gap:8px;
     }
 
     #toolbar {
       display:flex;
-      gap:8px;
+      gap:12px;
       align-items:center;
       flex-wrap:wrap;
+      max-width:calc(100% - 60px); /* Platz fürs Logo rechts lassen */
     }
-
-    .btn {
-      padding:6px 10px;
-      border:1px solid #ccc;
-      border-radius:6px;
-      background:#fff;
-      cursor:pointer;
-    }
-    .btn:active { transform: translateY(1px); }
 
     .hint {
-      color:#666;
-      font-size:0.9em;
+      color:#444;
+      font-size:0.8rem;
+      line-height:1.4;
+      max-width:600px;
+    }
+
+    .sizeControl {
+      display:flex;
+      align-items:center;
+      gap:4px;
+      font-size:0.8rem;
+      color:#444;
+    }
+
+    .sizeControl input {
+      width:4em;
+      padding:2px 4px;
+      font-size:0.8rem;
     }
 
     /* Logo rechts oben */
@@ -60,6 +70,7 @@
       align-items:center;
       justify-content:center;
       height:40px;
+      flex:none;
     }
     #logo img {
       height:40px;
@@ -71,7 +82,7 @@
     #main {
       flex:1;
       display:flex;
-      min-height:0;
+      min-height:0; /* wichtig, damit flexbox nicht overflowt */
       padding:12px;
       gap:12px;
       box-sizing:border-box;
@@ -101,7 +112,7 @@
       width:100%;
       height:100%;
       background:#fff;
-      touch-action:none;
+      touch-action:none; /* verhindert z.B. Browser-Scroll auf Touch */
     }
 
     /* === History rechts === */
@@ -116,22 +127,22 @@
       background:#fff;
       max-height:80vh;
       box-shadow:0 0 6px rgba(0,0,0,0.1);
+      font-size:0.9rem;
+      line-height:1.4;
     }
 
     #historyHeader {
       padding:8px 10px;
       border-bottom:1px solid #ddd;
       font-weight:600;
-      font-size:0.9rem;
       background:#f5f5f5;
       text-align:center;
+      font-size:0.9rem;
     }
 
     #historyList {
       flex:1;
       overflow:auto;
-      font-size:0.9rem;
-      line-height:1.4;
       padding:8px 10px;
     }
 
@@ -143,14 +154,19 @@
       border:1px solid transparent;
       margin-bottom:6px;
       background:#fff;
+      font-size:0.85rem;
     }
     .historyItem:hover {
       background:#eee;
     }
 
     /* Marker Styles */
-    .marker { cursor:grab; }
-    .marker:active { cursor:grabbing; }
+    .marker {
+      cursor:grab;
+    }
+    .marker:active {
+      cursor:grabbing;
+    }
 
     .marker circle {
       stroke:#000;
@@ -159,12 +175,14 @@
       transition:fill .1s, stroke .1s, stroke-width .1s;
     }
 
+    /* Hervorhebung aus History */
     .marker.highlight circle {
       fill:rgba(255,255,0,.6);
       stroke:#ff0;
       stroke-width:3;
     }
 
+    /* Events auf Marker durchlassen */
     #svgRoot * { pointer-events:visiblePainted; }
     #markerLayer { pointer-events:none; }
     #markerLayer > g { pointer-events:auto; }
@@ -175,17 +193,18 @@
 
   <header>
     <div id="toolbar">
-      <button id="addMode" class="btn">➕ Markieren</button>
-      <button id="selectMode" class="btn">🖱️ Verschieben / Ausblenden</button>
+      <div class="sizeControl">
+        <label for="sizeInput">Marker-Größe:</label>
+        <input id="sizeInput" type="number" step="0.05" min="0.1" value="0.2">
+      </div>
 
-      <label class="hint">Marker-Größe:
-        <input id="sizeInput" type="number" step="0.05" min="0.1" value="0.2" style="width:4em;">
-      </label>
-
-      <span class="hint">
-        Scroll = Zoom (schnell) • Leertaste+Ziehen / Rechtsklick+Ziehen = Pan •
-        Linksklick halten = verschieben • Shift+Linksklick = Label setzen • Shift+Rechtsklick = ausblenden
-      </span>
+      <div class="hint">
+        Shift + Linksklick = Marker setzen •
+        Linksklick halten = verschieben •
+        Shift + Rechtsklick = löschen (ausblenden) •
+        Scroll = Zoom •
+        Leertaste+Ziehen ODER Rechtsklick+Ziehen = Pan
+      </div>
     </div>
 
     <!-- 🎃 Logo rechts -->
@@ -214,209 +233,466 @@
   // === Konfiguration ===
   const SVG_PATH = 'https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUq4LMZhjRkzG2pwmNrgG1GdLjFi6H3bivz_2SEDYA0m9_lMrPQjxdFmEo0ukgdeCKKA/exec';
-  const TOKEN = null; // optional
+
+  // Falls du im Apps Script REQUIRE_TOKEN=true aktivierst:
+  const TOKEN = null; // z.B. 'GEHEIM', sonst null lassen
+
   const STORAGE_KEY = 'markers.v1';
 
-  const ZOOM_FACTOR = 1.4; // schnelleres Zoomen
-  const ZOOM_MAX = 20; 
-  let MARKER_SCALE = 0.2;
+  // Zoom-Einstellungen
+  const ZOOM_FACTOR = 1.4; // höher = schnelleres Scroll-Zoomen
+  const ZOOM_MAX = 20;     // maximaler Zoom in die Karte
+  let MARKER_SCALE = 0.2;  // Default Marker-Größe
 
-  let mode = 'add';
-  let svg, markerLayer, vb, baseViewBox;
-  let isPanning = false, panStart = null, panStartVB = null, spacePressed = false;
+  // Zustand
+  let svg, markerLayer;
+  let vb, baseViewBox;
+
+  let isPanning = false;
+  let panStart = null;
+  let panStartVB = null;
+  let spacePressed = false;
+
+  // Marker-Liste:
+  // { id, px, py, visible, createdAt }
+  // px/py = Prozent relativ zur gesamten Karte (baseViewBox)
   let markers = [];
+
+  // Map MarkerID -> SVG-<g>-Node (für History-Highlight)
   let markerDomMap = {};
 
   const $ = (sel, el=document) => el.querySelector(sel);
-  $('#addMode').onclick = () => setMode('add');
-  $('#selectMode').onclick = () => setMode('select');
+
+  // Größe anpassen
   $('#sizeInput').oninput = (e) => {
     MARKER_SCALE = Math.max(0.1, parseFloat(e.target.value) || MARKER_SCALE);
     renderMarkers();
   };
-  setMode('add');
 
-  fetch(SVG_PATH).then(r=>r.text()).then(txt=>{
-    $('#svgRoot').outerHTML = txt
-      .replace('<svg','<svg id="svgRoot" style="width:100%; height:100%; touch-action:none;"')
-      .replace('</svg>','<g id="markerLayer"></g></svg>');
-    svg=$('#svgRoot'); markerLayer=$('#markerLayer');
+  // --- SVG Laden & Setup ---
+  fetch(SVG_PATH)
+    .then(r => r.text())
+    .then(txt => {
+      // Eigenen Marker-Layer einfügen
+      $('#svgRoot').outerHTML = txt
+        .replace('<svg', '<svg id="svgRoot" style="width:100%; height:100%; touch-action:none;"')
+        .replace('</svg>', '<g id="markerLayer"></g></svg>');
 
-    if(!svg.getAttribute('viewBox')){
-      const w=parseFloat(svg.getAttribute('width'))||1000;
-      const h=parseFloat(svg.getAttribute('height'))||1000;
-      svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
-    }
-    const [x,y,w,h]=svg.getAttribute('viewBox').split(/\s+/).map(Number);
-    vb={x,y,width:w,height:h};
-    baseViewBox={...vb};
+      svg = $('#svgRoot');
+      markerLayer = $('#markerLayer');
 
-    svg.addEventListener('click',onSvgBackgroundClick);
-    svg.addEventListener('wheel',onWheel,{passive:false});
-    svg.addEventListener('mousedown',onMouseDown);
-    window.addEventListener('mousemove',onMouseMove);
-    window.addEventListener('mouseup',onMouseUp);
-    window.addEventListener('keydown',e=>{if(e.code==='Space'){spacePressed=true;e.preventDefault();}});
-    window.addEventListener('keyup',e=>{if(e.code==='Space'){spacePressed=false;}});
-    window.addEventListener('contextmenu',e=>{if(isPanning)e.preventDefault();});
+      // viewBox sicherstellen
+      if (!svg.getAttribute('viewBox')) {
+        const w = parseFloat(svg.getAttribute('width')) || 1000;
+        const h = parseFloat(svg.getAttribute('height')) || 1000;
+        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      }
 
-    loadFromSheet().catch(()=>{loadLocal();renderMarkers();});
-  });
+      // initiale viewBox merken
+      const [x,y,w,h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+      vb = {x,y,width:w,height:h};
+      baseViewBox = {...vb}; // ganze Karte -> unser "Koordinatensystem"
 
-  function setMode(m){mode=m;$('#addMode').style.fontWeight=(m==='add')?'600':'400';$('#selectMode').style.fontWeight=(m==='select')?'600':'400';}
+      // Interaktion fürs SVG
+      svg.addEventListener('click', onSvgClickForAdd);
+      svg.addEventListener('wheel', onWheel, {passive:false});
+      svg.addEventListener('mousedown', onMouseDownForPanOrMarker);
+      window.addEventListener('mousemove', onMouseMoveDragOrPan);
+      window.addEventListener('mouseup', onMouseUpGlobal);
 
-  function clientToBasePercent(evt){
-    const pt=svg.createSVGPoint();pt.x=evt.clientX;pt.y=evt.clientY;
-    const sp=pt.matrixTransform(svg.getScreenCTM().inverse());
-    const px=(sp.x-baseViewBox.x)/baseViewBox.width*100;
-    const py=(sp.y-baseViewBox.y)/baseViewBox.height*100;
-    return {px:Math.min(100,Math.max(0,px)),py:Math.min(100,Math.max(0,py))};
+      // Space gedrückt halten zum Pannen
+      window.addEventListener('keydown', (e)=>{
+        if (e.code==='Space') { spacePressed=true; e.preventDefault(); }
+      });
+      window.addEventListener('keyup', (e)=>{
+        if (e.code==='Space') { spacePressed=false; }
+      });
+
+      // Rechtsklick-Menü während aktivem Panning blockieren
+      window.addEventListener('contextmenu', (e)=>{
+        if (isPanning) e.preventDefault();
+      });
+
+      // Marker vom Sheet laden; Fallback localStorage
+      loadFromSheet().catch(()=>{
+        loadLocal();
+        renderMarkers();
+      });
+    });
+
+  // --- Koordinaten-Helfer ---
+  // Mauskoordinate → Prozent relativ zur ganzen Karte
+  function clientToBasePercent(evt) {
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const px = (sp.x - baseViewBox.x) / baseViewBox.width  * 100;
+    const py = (sp.y - baseViewBox.y) / baseViewBox.height * 100;
+
+    return {
+      px: Math.min(100, Math.max(0, px)),
+      py: Math.min(100, Math.max(0, py))
+    };
   }
+
+  // Prozent → absolute Kartenkoordinaten
   function percentToAbsXY(m){
-    return {absX:baseViewBox.x+(m.px/100)*baseViewBox.width,absY:baseViewBox.y+(m.py/100)*baseViewBox.height};
+    const absX = baseViewBox.x + (m.px/100)*baseViewBox.width;
+    const absY = baseViewBox.y + (m.py/100)*baseViewBox.height;
+    return {absX, absY};
   }
 
-  function onSvgBackgroundClick(evt){
-    if(mode!=='add')return;
-    if(evt.target.closest&&evt.target.closest('#markerLayer'))return;
-    const {px,py}=clientToBasePercent(evt);
-    const m=createMarker(px,py); saveLocal(); upsertRemote(m); renderMarkers();
+  // --- Marker erstellen / zeichnen / sync ---
+
+  // Shift + Linksklick auf freie Karte = neuen Marker setzen
+  function onSvgClickForAdd(evt){
+    if (!evt.shiftKey) return; // nur mit Shift
+    // Falls Klick eigentlich auf einem Marker war, kein neuer
+    if (evt.target.closest && evt.target.closest('#markerLayer')) return;
+
+    // Linksklick prüfen (click event ist eh meist button=0)
+    // Wir verlangen einfach Shift.
+    const {px, py} = clientToBasePercent(evt);
+    const m = createMarker(px, py);
+    saveLocal();
+    upsertRemote(m);
+    renderMarkers();
   }
-  function createMarker(px,py){
-    const id=crypto.randomUUID?crypto.randomUUID():'m'+Date.now()+Math.random();
-    const m={id,px,py,label:"",visible:1};markers.push(m);return m;
+
+  function createMarker(px, py){
+    const id = crypto.randomUUID ? crypto.randomUUID() : 'm'+Date.now()+Math.random();
+    const m = {
+      id,
+      px,
+      py,
+      visible: 1,
+      createdAt: Date.now()
+    };
+    markers.push(m);
+    return m;
   }
 
   function renderMarkers(){
-    markerLayer.innerHTML=''; markerDomMap={};
-    const baseR=Math.max(baseViewBox.width,baseViewBox.height)*0.006*MARKER_SCALE;
-    markers.filter(m=>m.visible!==0).forEach(m=>{
-      const {absX,absY}=percentToAbsXY(m);
-      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-      g.classList.add('marker'); g.dataset.id=m.id;
-      const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
-      circle.setAttribute('cx',absX);circle.setAttribute('cy',absY);circle.setAttribute('r',baseR);
-      g.appendChild(circle); markerLayer.appendChild(g); markerDomMap[m.id]=g;
-      let dragging=false;
-      g.addEventListener('mousedown',e=>{
-        if(mode!=='select')return;
-        if(e.button===0){
-          if(e.shiftKey){
-            e.preventDefault();
-            const newLabel=prompt('Label:',m.label||'')??m.label;
-            m.label=newLabel; saveLocal(); upsertRemote(m); renderMarkers(); return;
-          } else { dragging=true; e.preventDefault(); }
-        }
+    markerLayer.innerHTML = '';
+    markerDomMap = {};
+
+    // Marker-Radius relativ zur Kartengröße
+    const baseR = Math.max(baseViewBox.width, baseViewBox.height) * 0.006 * MARKER_SCALE;
+
+    markers
+      .filter(m => m.visible !== 0)
+      .forEach(m => {
+        const {absX, absY} = percentToAbsXY(m);
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.classList.add('marker');
+        g.setAttribute('data-id', m.id);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', absX);
+        circle.setAttribute('cy', absY);
+        circle.setAttribute('r', baseR);
+
+        g.appendChild(circle);
+        markerLayer.appendChild(g);
+
+        markerDomMap[m.id] = g;
+
+        // Marker-spezifische Interaktion:
+        attachMarkerInteractions(g, m, baseR);
       });
-      window.addEventListener('mousemove',e=>{
-        if(!dragging)return;
-        const p=clientToBasePercent(e); m.px=p.px; m.py=p.py; updateMarkerNode(g,m,baseR);
-      });
-      window.addEventListener('mouseup',()=>{
-        if(!dragging)return;
-        dragging=false; saveLocal(); upsertRemote(m); renderMarkers();
-      });
-      g.addEventListener('contextmenu',e=>{
-        if(mode!=='select')return;
-        if(e.shiftKey){e.preventDefault();m.visible=0;saveLocal();upsertRemote(m);renderMarkers();}
-      });
+
+    rebuildHistory(); // History nach jedem Render aktualisieren
+  }
+
+  function attachMarkerInteractions(g, m, baseR){
+    // Linksklick halten = verschieben
+    // Shift + Rechtsklick = ausblenden ("löschen")
+    let dragging = false;
+
+    g.addEventListener('mousedown', (e) => {
+      // Linke Maustaste -> Drag starten (wenn NICHT Shift)
+      if (e.button === 0 && !e.shiftKey) {
+        dragging = true;
+        e.preventDefault();
+      }
+      // Rechte Maustaste mit Shift -> "löschen" (ausblenden)
+      if (e.button === 2 && e.shiftKey) {
+        e.preventDefault();
+        // In der UI nennen wir das "löschen", intern nur visible=0
+        m.visible = 0;
+        saveLocal();
+        upsertRemote(m);
+        renderMarkers(); // neu zeichnen + History updaten
+      }
     });
-    rebuildHistory();
+
+    // global mousemove/mouseup werden unten gehandlet:
+    g._dragMarkerRef = m;
+    g._dragRadius = baseR;
+    g._isDragging = () => dragging;
+    g._stopDragging = () => { dragging = false; };
   }
 
-  function updateMarkerNode(g,m,r){
-    const {absX,absY}=percentToAbsXY(m);
-    const c=g.querySelector('circle');
-    c.setAttribute('cx',absX);c.setAttribute('cy',absY);
-    if(r)c.setAttribute('r',r);
-  }
+  // Wird von globalem MouseMove aufgerufen,
+  // um ggf. den Marker zu verschieben
+  function dragMoveMarkerIfNeeded(evt){
+    // Finde gerade den Marker, der dragging=true hat
+    // (billig, aber einfach: gehe alle markerDomMap durch)
+    for (const id in markerDomMap){
+      const g = markerDomMap[id];
+      const m = markers.find(mm => mm.id === id);
+      if (!m) continue;
+      const domDragging = g._isDragging && g._isDragging();
+      if (!domDragging) continue;
 
-  function rebuildHistory(){
-    const list=$('#historyList'); list.innerHTML='';
-    markers.filter(m=>m.visible!==0&&m.label.trim()!=='').slice().reverse().forEach(m=>{
-      const item=document.createElement('div');item.className='historyItem';item.textContent=m.label;item.dataset.id=m.id;
-      let pressed=false;
-      item.addEventListener('mousedown',e=>{
-        if(e.button!==0)return;
-        pressed=true;highlightMarker(m.id,true);e.preventDefault();
-      });
-      window.addEventListener('mouseup',()=>{
-        if(!pressed)return;
-        pressed=false;highlightMarker(m.id,false);
-      });
-      list.appendChild(item);
-    });
-  }
-  function highlightMarker(id,on){
-    const g=markerDomMap[id];if(!g)return;
-    if(on)g.classList.add('highlight');else g.classList.remove('highlight');
-  }
+      const p = clientToBasePercent(evt);
+      m.px = p.px;
+      m.py = p.py;
 
-  function clampAndSetViewBox(x,y,w,h){
-    if(w>baseViewBox.width)w=baseViewBox.width;
-    if(h>baseViewBox.height)h=baseViewBox.height;
-    const minX=baseViewBox.x,maxX=baseViewBox.x+baseViewBox.width-w;
-    const minY=baseViewBox.y,maxY=baseViewBox.y+baseViewBox.height-h;
-    if(x<minX)x=minX;if(x>maxX)x=maxX;if(y<minY)y=minY;if(y>maxY)y=maxY;
-    vb={x,y,width:w,height:h};svg.setAttribute('viewBox',`${x} ${y} ${w} ${h}`);
-  }
-  function onWheel(e){
-    e.preventDefault();
-    const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
-    const sp=pt.matrixTransform(svg.getScreenCTM().inverse());
-    const scale=(e.deltaY<0)?(1/ZOOM_FACTOR):ZOOM_FACTOR;
-    let newW=vb.width*scale,newH=vb.height*scale;
-    const minW=baseViewBox.width/ZOOM_MAX,minH=baseViewBox.height/ZOOM_MAX;
-    if(newW<minW)newW=minW;if(newH<minH)newH=minH;
-    const maxW=baseViewBox.width,maxH=baseViewBox.height;
-    if(newW>maxW)newW=maxW;if(newH>maxH)newH=maxH;
-    const kx=(sp.x-vb.x)/vb.width,ky=(sp.y-vb.y)/vb.height;
-    const newX=sp.x-kx*newW,newY=sp.y-ky*newH;
-    clampAndSetViewBox(newX,newY,newW,newH);
-  }
-  function onMouseDown(e){
-    if((e.button===0&&spacePressed)||e.button===2){
-      isPanning=true;panStart={x:e.clientX,y:e.clientY};panStartVB={...vb};e.preventDefault();
+      updateMarkerNode(g, m, g._dragRadius);
     }
   }
-  function onMouseMove(e){
-    if(!isPanning)return;
-    const dx=e.clientX-panStart.x,dy=e.clientY-panStart.y;
-    const m=svg.getScreenCTM();
-    const scaleX=vb.width/(m.a*svg.clientWidth);
-    const scaleY=vb.height/(m.d*svg.clientHeight);
-    const newX=panStartVB.x-dx*scaleX,newY=panStartVB.y-dy*scaleY;
-    clampAndSetViewBox(newX,newY,vb.width,vb.height);
-  }
-  function onMouseUp(){isPanning=false;}
 
-  function saveLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(markers));}
-  function loadLocal(){try{markers=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch(e){markers=[];}}
+  // Wird von globalem MouseUp aufgerufen,
+  // um Drag zu beenden + speichern
+  function dragStopIfNeeded(){
+    for (const id in markerDomMap){
+      const g = markerDomMap[id];
+      const m = markers.find(mm => mm.id === id);
+      if (!m) continue;
+      const domDragging = g._isDragging && g._isDragging();
+      if (!domDragging) continue;
+
+      // Drag beenden
+      g._stopDragging && g._stopDragging();
+
+      saveLocal();
+      upsertRemote(m);
+      renderMarkers(); // neu zeichnen + History updaten
+    }
+  }
+
+  function updateMarkerNode(g, m, rOverride){
+    const {absX, absY} = percentToAbsXY(m);
+    const circle = g.querySelector('circle');
+    circle.setAttribute('cx', absX);
+    circle.setAttribute('cy', absY);
+    if (rOverride != null) {
+      circle.setAttribute('r', rOverride);
+    }
+  }
+
+  // --- History rechts ---
+  // Zeigt NUR sichtbare Marker
+  // Sortiert nach createdAt: neueste zuerst
+  // Eintrag-Hold = Marker highlighten (gelb)
+  function rebuildHistory(){
+    const listEl = $('#historyList');
+    listEl.innerHTML = '';
+
+    const visibleMarkers = markers
+      .filter(m => m.visible !== 0)
+      .slice()
+      .sort((a,b)=> b.createdAt - a.createdAt);
+
+    visibleMarkers.forEach(m => {
+      const shortId = m.id.slice(-4);
+      const item = document.createElement('div');
+      item.className = 'historyItem';
+      item.textContent = `Marker ${shortId}`;
+      item.dataset.id = m.id;
+
+      let pressed = false;
+
+      // Klick halten => Highlight
+      item.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        pressed = true;
+        highlightMarker(m.id, true);
+        e.preventDefault();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!pressed) return;
+        pressed = false;
+        highlightMarker(m.id, false);
+      });
+
+      listEl.appendChild(item);
+    });
+  }
+
+  function highlightMarker(id, on){
+    const g = markerDomMap[id];
+    if (!g) return;
+    if (on) g.classList.add('highlight');
+    else g.classList.remove('highlight');
+  }
+
+  // --- Pan & Zoom ---
+  // Begrenzungen:
+  // - Raus nur bis gesamte Karte
+  // - Panning bleibt innerhalb der Karte
+  function clampAndSetViewBox(x,y,w,h){
+    // Begrenze Zoom-Out
+    if (w > baseViewBox.width)  w = baseViewBox.width;
+    if (h > baseViewBox.height) h = baseViewBox.height;
+
+    // Begrenze Pan
+    const minX = baseViewBox.x;
+    const maxX = baseViewBox.x + baseViewBox.width  - w;
+    const minY = baseViewBox.y;
+    const maxY = baseViewBox.y + baseViewBox.height - h;
+
+    if (x < minX) x = minX;
+    if (x > maxX) x = maxX;
+    if (y < minY) y = minY;
+    if (y > maxY) y = maxY;
+
+    vb = {x,y,width:w,height:h};
+    svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+  }
+
+  function onWheel(e){
+    e.preventDefault();
+
+    // Karten-Koordinate unter der Maus
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    // Zoom-Faktor (rein/raus)
+    const scale = (e.deltaY < 0) ? (1/ZOOM_FACTOR) : ZOOM_FACTOR;
+
+    let newW = vb.width * scale;
+    let newH = vb.height * scale;
+
+    // Maximales Reinzoomen
+    const minW = baseViewBox.width / ZOOM_MAX;
+    const minH = baseViewBox.height / ZOOM_MAX;
+    if (newW < minW) newW = minW;
+    if (newH < minH) newH = minH;
+
+    // Rauszoomen nur bis ganze Karte
+    const maxW = baseViewBox.width;
+    const maxH = baseViewBox.height;
+    if (newW > maxW) newW = maxW;
+    if (newH > maxH) newH = maxH;
+
+    // Zoom auf Mausposition ausrichten
+    const kx = (sp.x - vb.x) / vb.width;
+    const ky = (sp.y - vb.y) / vb.height;
+    const newX = sp.x - kx * newW;
+    const newY = sp.y - ky * newH;
+
+    clampAndSetViewBox(newX, newY, newW, newH);
+  }
+
+  // --- Pan & Drag Handling ---
+  function onMouseDownForPanOrMarker(e){
+    // Pan: Space+Linksklick ODER Rechtsklick (ohne Shift)
+    if ( (e.button === 0 && spacePressed) ||
+         (e.button === 2 && !e.shiftKey) ) {
+      isPanning = true;
+      panStart = {x:e.clientX, y:e.clientY};
+      panStartVB = {...vb};
+      e.preventDefault();
+    }
+  }
+
+  function onMouseMoveDragOrPan(e){
+    // falls gerade ein Marker gezogen wird, bewege ihn
+    dragMoveMarkerIfNeeded(e);
+
+    // Pan?
+    if (!isPanning) return;
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+
+    // Bildschirm-Pixel → SVG-Koordinaten
+    const m = svg.getScreenCTM();
+    const scaleX = vb.width  / (m.a * svg.clientWidth);
+    const scaleY = vb.height / (m.d * svg.clientHeight);
+
+    const newX = panStartVB.x - dx * scaleX;
+    const newY = panStartVB.y - dy * scaleY;
+
+    clampAndSetViewBox(newX, newY, vb.width, vb.height);
+  }
+
+  function onMouseUpGlobal(){
+    // Pan beenden
+    isPanning = false;
+    // evtl. Drag eines Markers beenden
+    dragStopIfNeeded();
+  }
+
+  // --- Persistenz lokal & Sheets ---
+  function saveLocal(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
+  }
+
+  function loadLocal(){
+    try {
+      markers = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch(e){
+      markers = [];
+    }
+  }
 
   async function loadFromSheet(){
-    const qs=TOKEN?`?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}`:`?t=${Date.now()}`;
-    const res=await fetch(WEB_APP_URL+qs);if(!res.ok)throw new Error('GET fail');
-    const data=await res.json();
-    markers=Array.isArray(data.markers)?data.markers.map(m=>({
-      id:m.id,px:+m.px,py:+m.py,label:m.label||'',visible:(m.visible===0?0:1)
-    })):[];
-    saveLocal();renderMarkers();
+    const qs = TOKEN
+      ? `?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}`
+      : `?t=${Date.now()}`;
+
+    const res = await fetch(WEB_APP_URL + qs, {method:'GET'});
+    if (!res.ok) throw new Error('GET failed');
+
+    const data = await res.json();
+    markers = Array.isArray(data.markers)
+      ? data.markers.map(m => ({
+          id: m.id,
+          px: Number(m.px),
+          py: Number(m.py),
+          visible: (m.visible === 0 ? 0 : 1),
+          createdAt: m.createdAt ? Number(m.createdAt) : Date.now()
+        }))
+      : [];
+
+    saveLocal();
+    renderMarkers();
   }
 
   function formBody(params){
-    const p=new URLSearchParams();Object.entries(params).forEach(([k,v])=>p.set(k,v));
-    if(TOKEN)p.set('token',TOKEN);return p.toString();
+    const p = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => p.set(k, v));
+    if (TOKEN) p.set('token', TOKEN);
+    return p.toString();
   }
-  async function upsertRemote(m){
-    const res=await fetch(WEB_APP_URL,{
+
+  function upsertRemote(m){
+    // Speichert Marker inkl. visible und createdAt
+    fetch(WEB_APP_URL, {
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:formBody({action:'upsert',payload:JSON.stringify({
-        id:m.id,px:m.px,py:m.py,label:m.label||'',visible:(m.visible===0?0:1)
-      })})
-    });
-    if(!res.ok)console.warn('upsert fail');
+      body: formBody({
+        action:'upsert',
+        payload: JSON.stringify({
+          id: m.id,
+          px: m.px,
+          py: m.py,
+          label: "",            // legacy Feld, bleibt leer
+          visible: (m.visible === 0 ? 0 : 1),
+          createdAt: m.createdAt || Date.now()
+        })
+      })
+    }).catch(()=>{ /* offline ok */ });
   }
+
 })();
 </script>
 </body>
