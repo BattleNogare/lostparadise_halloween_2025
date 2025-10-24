@@ -18,8 +18,8 @@
       --text-dim: #b7a999;
       --marker-fill: rgba(255,60,0,0.9);
       --marker-stroke: #ff6a00;
-      --marker-highlight-fill: rgba(255,255,120,0.4);
-      --marker-highlight-stroke: #fff38a;
+      --marker-highlight-fill: rgba(255,105,180,0.35); /* zartes Pink (Hotpink) */
+      --marker-highlight-stroke: #ff69b4;              /* Pink stroke */
     }
 
     html, body {
@@ -184,11 +184,11 @@
       transition:fill .1s, stroke .1s, stroke-width .1s;
     }
 
-    .marker.highlight circle {
-      fill:var(--marker-highlight-fill);
-      stroke:var(--marker-highlight-stroke);
+      .marker.highlight circle {
+      fill: var(--marker-highlight-fill);
+      stroke: var(--marker-highlight-stroke);
       stroke-width:3;
-      filter: drop-shadow(0 0 6px rgba(255,255,150,0.8));
+      filter: drop-shadow(0 0 8px rgba(255,105,180,0.8)); /* pink glow */
     }
 
     #markerLayer { pointer-events:none; }
