@@ -42,7 +42,7 @@
   </div>
 
   <footer>
-    <span class="hint">Synchronisation mit Google Sheets (feingranulares Upsert pro Marker).</span>
+    <span class="hint">Synchronisation mit Google Sheets (Upsert pro Marker).</span>
   </footer>
 </div>
 
@@ -51,8 +51,10 @@
   // === Konfiguration ===
   const SVG_PATH = 'https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';
   const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUq4LMZhjRkzG2pwmNrgG1GdLjFi6H3bivz_2SEDYA0m9_lMrPQjxdFmEo0ukgdeCKKA/exec';
-  // Optional: wenn du im Apps Script REQUIRE_TOKEN=true setzt:
-  const TOKEN = null; // z.B. 'GEHEIM'; sonst null lassen
+
+  // Falls du im Apps Script REQUIRE_TOKEN=true setzt, hier das gleiche Token eintragen,
+  // sonst bitte TOKEN = null lassen.
+  const TOKEN = null;
 
   const STORAGE_KEY = 'markers.v1';
   const ZOOM_FACTOR = 1.1;
@@ -72,7 +74,10 @@
   $('#selectMode').onclick = () => setMode('select');
   $('#clearBtn').onclick = clearAllRemote;
   $('#reloadBtn').onclick = loadFromSheet;
-  $('#sizeInput').oninput = (e) => { MARKER_SCALE = Math.max(0.1, parseFloat(e.target.value) || 1.0); renderMarkers(); };
+  $('#sizeInput').oninput = (e) => {
+    MARKER_SCALE = Math.max(0.1, parseFloat(e.target.value) || 1.0);
+    renderMarkers();
+  };
 
   setMode('add');
 
@@ -84,6 +89,7 @@
     svg = $('#svgRoot');
     markerLayer = $('#markerLayer');
 
+    // viewBox sicherstellen
     if (!svg.getAttribute('viewBox')) {
       const w = parseFloat(svg.getAttribute('width')) || 1000;
       const h = parseFloat(svg.getAttribute('height')) || 1000;
@@ -99,12 +105,25 @@
     svg.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('keydown', (e)=>{ if (e.code==='Space') { spacePressed=true; e.preventDefault(); }});
-    window.addEventListener('keyup', (e)=>{ if (e.code==='Space') { spacePressed=false; }});
-    window.addEventListener('contextmenu', (e)=>{ if (isPanning) e.preventDefault(); });
 
-    // Laden
-    loadFromSheet().catch(()=>{ loadLocal(); renderMarkers(); });
+    // Space gedrückt halten zum Pannen
+    window.addEventListener('keydown', (e)=>{
+      if (e.code==='Space') { spacePressed=true; e.preventDefault(); }
+    });
+    window.addEventListener('keyup', (e)=>{
+      if (e.code==='Space') { spacePressed=false; }
+    });
+
+    // Rechtsklick-Menü blocken nur wenn wir gerade mitten im Panning sind
+    window.addEventListener('contextmenu', (e)=>{
+      if (isPanning) e.preventDefault();
+    });
+
+    // Erstmal remote laden. Wenn das fehlschlägt, fallback localStorage.
+    loadFromSheet().catch(()=>{
+      loadLocal();
+      renderMarkers();
+    });
   });
 
   function setMode(m){
@@ -113,7 +132,8 @@
     $('#selectMode').style.fontWeight = (m==='select') ? '600' : '400';
   }
 
-  // --- Koordinaten & Marker ---
+  // === Koordinaten / Marker
+
   function clientToSvgPercent(evt) {
     const pt = svg.createSVGPoint();
     pt.x = evt.clientX; pt.y = evt.clientY;
@@ -125,12 +145,15 @@
 
   function onSvgClick(evt){
     if (mode !== 'add') return;
+    // Klick auf bestehenden Marker soll NICHT neuen Marker machen
     if (evt.target.closest && evt.target.closest('#markerLayer')) return;
+
     const {px, py} = clientToSvgPercent(evt);
     const label = prompt('Optional: Label/Notiz', '') || '';
     const m = addMarker(px, py, label);
-    renderMarkers(); saveLocal();
-    upsertRemote(m).catch(()=>{}); // sofort ins Sheet
+    renderMarkers();
+    saveLocal();
+    upsertRemote(m).catch(()=>{});
   }
 
   function addMarker(px, py, label=''){
@@ -142,28 +165,39 @@
 
   function renderMarkers(){
     markerLayer.innerHTML = '';
+    // Marker-Radius hängt von der Grundkarte ab + deinem Scale-Faktor
     const baseR = Math.max(baseViewBox.width, baseViewBox.height) * 0.006 * MARKER_SCALE;
+
     markers.forEach(m => {
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.classList.add('marker'); g.setAttribute('data-id', m.id);
+      g.classList.add('marker');
+      g.setAttribute('data-id', m.id);
+
       const cx = vb.x + (m.px/100)*vb.width;
       const cy = vb.y + (m.py/100)*vb.height;
 
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', baseR);
+      circle.setAttribute('cx', cx);
+      circle.setAttribute('cy', cy);
+      circle.setAttribute('r', baseR);
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', cx); text.setAttribute('y', cy);
+      text.setAttribute('x', cx);
+      text.setAttribute('y', cy);
       text.textContent = m.label || '●';
 
-      g.appendChild(circle); g.appendChild(text); markerLayer.appendChild(g);
+      g.appendChild(circle);
+      g.appendChild(text);
+      markerLayer.appendChild(g);
 
-      // Drag & Drop
+      // Drag & Drop nur im select-Modus
       let dragging = false;
       g.addEventListener('mousedown', (e) => {
         if (mode !== 'select') return;
-        dragging = true; e.preventDefault();
+        dragging = true;
+        e.preventDefault();
       });
+
       window.addEventListener('mousemove', (e) => {
         if (!dragging) return;
         const p = clientToSvgPercent(e);
@@ -171,27 +205,37 @@
         m.py = Math.min(100, Math.max(0, p.py));
         updateMarkerNode(g, m, baseR);
       });
+
       window.addEventListener('mouseup', () => {
         if (!dragging) return;
         dragging = false;
         saveLocal();
-        upsertRemote(m).catch(()=>{}); // Upsert pro Marker beim Loslassen
+        upsertRemote(m).catch(()=>{});
       });
 
-      // Löschen / Label bearbeiten
+      // Klick-Interaktion im select-Modus
       g.addEventListener('click', (e) => {
         if (mode !== 'select') return;
+
+        // SHIFT+Klick -> löschen
         if (e.shiftKey) {
           markers = markers.filter(x => x.id !== m.id);
-          saveLocal(); renderMarkers();
+          saveLocal();
+          renderMarkers();
           deleteRemote(m.id).catch(()=>{});
-        } else if (e.altKey || e.metaKey || e.ctrlKey) {
+        }
+        // Alt / Ctrl / Cmd -> Label bearbeiten
+        else if (e.altKey || e.metaKey || e.ctrlKey) {
           const newLabel = prompt('Label bearbeiten', m.label) ?? m.label;
-          m.label = newLabel; saveLocal(); updateMarkerNode(g, m, baseR);
+          m.label = newLabel;
+          saveLocal();
+          updateMarkerNode(g, m, baseR);
           upsertRemote(m).catch(()=>{});
         }
+
         e.stopPropagation();
       });
+
     });
   }
 
@@ -200,33 +244,46 @@
     const cy = vb.y + (m.py/100)*vb.height;
     const circle = g.querySelector('circle');
     const text = g.querySelector('text');
-    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
-    if (rOverride != null) circle.setAttribute('r', rOverride);
-    text.setAttribute('x', cx); text.setAttribute('y', cy);
+
+    circle.setAttribute('cx', cx);
+    circle.setAttribute('cy', cy);
+    if (rOverride != null) {
+      circle.setAttribute('r', rOverride);
+    }
+
+    text.setAttribute('x', cx);
+    text.setAttribute('y', cy);
     text.textContent = m.label || '●';
   }
 
-  // --- Zoom & Pan ---
+  // === Zoom & Pan
+
   function setViewBox(x,y,w,h){
     vb = {x,y,width:w,height:h};
     svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-    renderMarkers();
+    renderMarkers(); // neu platzieren
   }
 
   function onWheel(e){
     e.preventDefault();
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+
+    // Weltkoordinate unter dem Mauszeiger
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
     const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
 
     const scale = (e.deltaY < 0) ? (1/ZOOM_FACTOR) : ZOOM_FACTOR;
     let newW = vb.width * scale;
     let newH = vb.height * scale;
 
+    // harte Zoom-Grenzen
     const minW = baseViewBox.width / ZOOM_MAX;
     const maxW = baseViewBox.width / ZOOM_MIN;
     newW = Math.min(Math.max(newW, minW), maxW);
     newH = newW * (vb.height / vb.width);
 
+    // zoome auf den Punkt unter dem Mauszeiger
     const kx = (sp.x - vb.x) / vb.width;
     const ky = (sp.y - vb.y) / vb.height;
     const newX = sp.x - kx * newW;
@@ -236,7 +293,7 @@
   }
 
   function onMouseDown(e){
-    // Pan: Space + Linksklick ODER Rechtsklick
+    // Pan: Space+Linksklick ODER Rechtsklick
     if ((e.button === 0 && spacePressed) || e.button === 2) {
       isPanning = true;
       panStart = {x: e.clientX, y: e.clientY};
@@ -244,70 +301,119 @@
       e.preventDefault();
     }
   }
+
   function onMouseMove(e){
     if (!isPanning) return;
     const dx = e.clientX - panStart.x;
     const dy = e.clientY - panStart.y;
+
+    // Bildschirm-Pixel -> SVG-Units
     const m = svg.getScreenCTM();
     const scaleX = vb.width / (m.a * svg.clientWidth);
     const scaleY = vb.height / (m.d * svg.clientHeight);
-    setViewBox(panStartVB.x - dx*scaleX, panStartVB.y - dy*scaleY, vb.width, vb.height);
-  }
-  function onMouseUp(){ isPanning = false; }
 
-  // --- Persistenz lokal + Sheet ---
-  function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(markers)); }
+    setViewBox(
+      panStartVB.x - dx * scaleX,
+      panStartVB.y - dy * scaleY,
+      vb.width,
+      vb.height
+    );
+  }
+
+  function onMouseUp(){
+    isPanning = false;
+  }
+
+  // === Persistenz
+
+  function saveLocal(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
+  }
   function loadLocal(){
-    try { markers = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-    catch(e){ markers = []; }
+    try {
+      markers = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch(e){
+      markers = [];
+    }
+  }
+
+  function buildBody(params){
+    const p = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => p.set(k, v));
+    if (TOKEN) p.set('token', TOKEN); // shared secret optional
+    return p.toString();
   }
 
   async function loadFromSheet(){
-    const url = WEB_APP_URL + (TOKEN ? `?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}` : `?t=${Date.now()}`);
-    const res = await fetch(url, {method:'GET'});
+    // Cache-Buster mit ?t=Timestamp, optional token
+    const qs = TOKEN
+      ? `?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}`
+      : `?t=${Date.now()}`;
+
+    const res = await fetch(WEB_APP_URL + qs, {method:'GET'});
     if (!res.ok) throw new Error('GET failed');
+
     const data = await res.json();
-    markers = Array.isArray(data.markers) ? data.markers.map(m => ({
-      id: m.id, px: Number(m.px), py: Number(m.py), label: m.label || ''
-    })) : [];
+    markers = Array.isArray(data.markers)
+      ? data.markers.map(m => ({
+          id: m.id,
+          px: Number(m.px),
+          py: Number(m.py),
+          label: m.label || ''
+        }))
+      : [];
+
     saveLocal();
     renderMarkers();
-  }
-
-  function formBody(params){
-    const p = new URLSearchParams();
-    Object.entries(params).forEach(([k,v]) => p.set(k, v));
-    if (TOKEN) p.set('token', TOKEN);
-    return p.toString();
   }
 
   async function upsertRemote(m){
     const res = await fetch(WEB_APP_URL, {
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: formBody({ action:'upsert', payload: JSON.stringify(m) })
+      body: buildBody({
+        action:'upsert',
+        payload: JSON.stringify(m)
+      })
     });
-    if (!res.ok) throw new Error('upsert failed');
+    if (!res.ok) {
+      console.warn('upsert failed');
+    }
   }
 
   async function deleteRemote(id){
     const res = await fetch(WEB_APP_URL, {
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: formBody({ action:'delete', payload: JSON.stringify({id}) })
+      body: buildBody({
+        action:'delete',
+        payload: JSON.stringify({id})
+      })
     });
-    if (!res.ok) throw new Error('delete failed');
+    if (!res.ok) {
+        console.warn('delete failed');
+    }
   }
 
   async function clearAllRemote(){
     if (!confirm('Alle Marker im Sheet löschen?')) return;
+
     const res = await fetch(WEB_APP_URL, {
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: formBody({ action:'clearAll' })
+      body: buildBody({
+        action:'clearAll'
+      })
     });
-    if (!res.ok) { alert('Löschen fehlgeschlagen'); return; }
-    markers = []; saveLocal(); renderMarkers();
+
+    if (!res.ok) {
+      alert('Löschen fehlgeschlagen');
+      return;
+    }
+
+    markers = [];
+    saveLocal();
+    renderMarkers();
   }
 
 })();
