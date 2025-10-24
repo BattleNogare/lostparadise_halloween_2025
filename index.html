@@ -9,10 +9,28 @@
   <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/halloween_fav.ico">
 
   <style>
+    :root {
+      --bg-page: #0b0b10;
+      --bg-panel: #14141c;
+      --bg-panel-alt: #1a1a24;
+      --border-glow: #ff6a00;
+      --text-main: #f0e6d8;
+      --text-dim: #b7a999;
+      --shadow-glow: 0 0 20px rgba(255,106,0,0.4);
+      --shadow-box: 0 0 20px rgba(0,0,0,0.8);
+      --history-hover: rgba(255,106,0,0.1);
+      --marker-fill: rgba(255,60,0,0.9);        /* blutiges Orange/Rot */
+      --marker-stroke: #ff6a00;
+      --marker-highlight-fill: rgba(255,255,120,0.4);
+      --marker-highlight-stroke: #fff38a;
+    }
+
     html, body {
       margin:0;
-      font-family:system-ui, sans-serif;
-      background:#fafafa;
+      font-family:system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #2a1a1a 0%, #0b0b10 60%);
+      background-color: var(--bg-page);
+      color: var(--text-main);
       height:100%;
     }
 
@@ -21,12 +39,15 @@
       flex-direction:column;
       min-height:100vh;
       max-width:100%;
+      color:var(--text-main);
     }
 
+    /* Header */
     header {
       padding:8px 12px;
-      background:#f5f5f5;
-      border-bottom:1px solid #ddd;
+      background:var(--bg-panel);
+      border-bottom:1px solid var(--border-glow);
+      box-shadow:var(--shadow-glow);
       display:flex;
       align-items:center;
       justify-content:space-between;
@@ -43,18 +64,20 @@
     }
 
     .hint {
-      color:#444;
+      color:var(--text-dim);
       font-size:0.8rem;
       line-height:1.4;
       max-width:600px;
     }
 
+    /* Logo rechts oben */
     #logo {
       display:flex;
       align-items:center;
       justify-content:center;
       height:40px;
       flex:none;
+      filter: drop-shadow(0 0 8px rgba(255,106,0,0.6));
     }
     #logo img {
       height:40px;
@@ -62,6 +85,7 @@
       display:block;
     }
 
+    /* Hauptbereich */
     #main {
       flex:1;
       display:flex;
@@ -71,6 +95,7 @@
       box-sizing:border-box;
     }
 
+    /* Map Wrapper */
     #stageWrapper {
       flex:1;
       min-width:0;
@@ -79,46 +104,50 @@
 
     #stage {
       flex:1;
-      border:3px solid #333;
+      border:2px solid var(--border-glow);
       border-radius:10px;
-      background:#fff;
+      background:var(--bg-panel-alt);
       overflow:hidden;
       height:80vh;
       max-height:80vh;
       max-width:100%;
       position:relative;
-      box-shadow:0 0 10px rgba(0,0,0,0.15);
+      box-shadow:0 0 30px rgba(255,106,0,0.2), var(--shadow-box);
     }
 
     #svgRoot {
       width:100%;
       height:100%;
-      background:#fff;
+      background:#000; /* Karte selber schwarz dahinter */
       touch-action:none;
     }
 
+    /* History rechts */
     #history {
       width:240px;
       max-width:240px;
       flex:none;
       display:flex;
       flex-direction:column;
-      border:1px solid #ccc;
+      border:2px solid var(--border-glow);
       border-radius:8px;
-      background:#fff;
+      background:var(--bg-panel);
       max-height:80vh;
-      box-shadow:0 0 6px rgba(0,0,0,0.1);
+      box-shadow:0 0 30px rgba(255,106,0,0.2), var(--shadow-box);
       font-size:0.9rem;
       line-height:1.4;
+      color:var(--text-main);
     }
 
     #historyHeader {
       padding:8px 10px;
-      border-bottom:1px solid #ddd;
+      border-bottom:1px solid var(--border-glow);
       font-weight:600;
-      background:#f5f5f5;
+      background:var(--bg-panel-alt);
       text-align:center;
       font-size:0.9rem;
+      color:var(--text-main);
+      box-shadow:0 0 12px rgba(255,106,0,0.4);
     }
 
     #historyList {
@@ -134,13 +163,19 @@
       user-select:none;
       border:1px solid transparent;
       margin-bottom:6px;
-      background:#fff;
+      background:rgba(255,106,0,0.07);
       font-size:0.85rem;
+      color:var(--text-main);
+      line-height:1.4;
+      transition:background .1s, box-shadow .1s;
+      box-shadow:0 0 6px rgba(255,106,0,0.3);
     }
     .historyItem:hover {
-      background:#eee;
+      background:var(--history-hover);
+      box-shadow:0 0 10px rgba(255,106,0,0.5);
     }
 
+    /* Marker Style */
     .marker {
       cursor:grab;
     }
@@ -149,21 +184,25 @@
     }
 
     .marker circle {
-      stroke:#000;
+      stroke:var(--marker-stroke);
       stroke-width:1;
-      fill:rgba(255,0,0,.85);
+      fill:var(--marker-fill);
       transition:fill .1s, stroke .1s, stroke-width .1s;
+      filter: drop-shadow(0 0 4px rgba(255,106,0,0.8));
     }
 
     .marker.highlight circle {
-      fill:rgba(255,255,0,.6);
-      stroke:#ff0;
+      fill:var(--marker-highlight-fill);
+      stroke:var(--marker-highlight-stroke);
       stroke-width:3;
+      filter: drop-shadow(0 0 6px rgba(255,255,150,0.8));
     }
 
+    /* Interaktionsebene */
     #svgRoot * { pointer-events:visiblePainted; }
     #markerLayer { pointer-events:none; }
     #markerLayer > g { pointer-events:auto; }
+
   </style>
 </head>
 <body>
@@ -207,168 +246,429 @@
   const TOKEN=null;
   const STORAGE_KEY='markers.v1';
 
-  const ZOOM_FACTOR=1.4, ZOOM_MAX=20;
-  const SCALE_OUT=1.0, SCALE_IN=0.2;
+  const ZOOM_FACTOR=1.4;
+  const ZOOM_MAX=20;
+
+  // 👇 Deine gewünschte Skalierung
+  const SCALE_OUT=0.8;
+  const SCALE_IN=0.1;
 
   let svg,markerLayer,vb,baseViewBox;
   let isPanning=false,panStart=null,panStartVB=null,spacePressed=false;
   let markers=[],markerDomMap={};
 
+  // Auto-IDs
   let nextIdNumber=1;
-  const getNextId=()=>String(nextIdNumber++).padStart(4,'0');
+  function getNextId(){
+    const idStr=String(nextIdNumber).padStart(4,'0');
+    nextIdNumber++;
+    return idStr;
+  }
+
   const $=(s,e=document)=>e.querySelector(s);
 
+  // === SVG laden & initialisieren ===
   fetch(SVG_PATH).then(r=>r.text()).then(txt=>{
-    $('#svgRoot').outerHTML=txt.replace('<svg','<svg id="svgRoot" style="width:100%;height:100%;touch-action:none;"').replace('</svg>','<g id="markerLayer"></g></svg>');
-    svg=$('#svgRoot');markerLayer=$('#markerLayer');
+    $('#svgRoot').outerHTML=txt
+      .replace('<svg','<svg id="svgRoot" style="width:100%; height:100%; touch-action:none; background:#000;"')
+      .replace('</svg>','<g id="markerLayer"></g></svg>');
+
+    svg=$('#svgRoot');
+    markerLayer=$('#markerLayer');
+
+    // Kontextmenü überall über der Karte killen
     const stageEl=document.getElementById('stage');
     stageEl.addEventListener('contextmenu',e=>e.preventDefault());
     svg.addEventListener('contextmenu',e=>e.preventDefault());
-    if(!svg.getAttribute('viewBox')){const w=parseFloat(svg.getAttribute('width'))||1000,h=parseFloat(svg.getAttribute('height'))||1000;svg.setAttribute('viewBox',`0 0 ${w} ${h}`);}
+
+    // ViewBox sichern
+    if(!svg.getAttribute('viewBox')){
+      const w=parseFloat(svg.getAttribute('width'))||1000;
+      const h=parseFloat(svg.getAttribute('height'))||1000;
+      svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+    }
     const [x,y,w,h]=svg.getAttribute('viewBox').split(/\s+/).map(Number);
-    vb={x,y,width:w,height:h};baseViewBox={...vb};
-    svg.addEventListener('click',onSvgClickAdd);
+    vb={x,y,width:w,height:h};
+    baseViewBox={...vb};
+
+    // Events
+    svg.addEventListener('click',onSvgClickAdd); // Shift+Linksklick -> neuer Marker
     svg.addEventListener('wheel',onWheel,{passive:false});
     svg.addEventListener('mousedown',onMouseDownPanOrMarkerStart);
     window.addEventListener('mousemove',onMouseMoveAll);
     window.addEventListener('mouseup',onMouseUpAll);
-    window.addEventListener('keydown',e=>{if(e.code==='Space'){spacePressed=true;e.preventDefault();}});
-    window.addEventListener('keyup',e=>{if(e.code==='Space')spacePressed=false;});
-    loadFromSheet().catch(()=>{loadLocal();updateNextId();renderMarkers();});
+
+    window.addEventListener('keydown',e=>{
+      if(e.code==='Space'){
+        spacePressed=true;
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup',e=>{
+      if(e.code==='Space'){
+        spacePressed=false;
+      }
+    });
+
+    // Daten laden
+    loadFromSheet().catch(()=>{
+      loadLocal();
+      updateNextIdFromMarkers();
+      renderMarkers();
+    });
   });
 
-  function updateNextId(){
-    const ids=markers.map(m=>parseInt(m.id,10)).filter(n=>!isNaN(n));
-    nextIdNumber=(ids.length?Math.max(...ids)+1:1);
+  // Hilfsfunktion: nextIdNumber nachladen
+  function updateNextIdFromMarkers(){
+    const nums=markers
+      .map(m=>parseInt(m.id,10))
+      .filter(n=>!isNaN(n));
+    nextIdNumber=(nums.length?Math.max(...nums)+1:1);
   }
 
+  // Koordinaten-Konvertierung
   function clientToBasePercent(evt){
-    const pt=svg.createSVGPoint();pt.x=evt.clientX;pt.y=evt.clientY;
+    const pt=svg.createSVGPoint();
+    pt.x=evt.clientX;pt.y=evt.clientY;
     const sp=pt.matrixTransform(svg.getScreenCTM().inverse());
     const px=(sp.x-baseViewBox.x)/baseViewBox.width*100;
     const py=(sp.y-baseViewBox.y)/baseViewBox.height*100;
-    return{px:Math.min(100,Math.max(0,px)),py:Math.min(100,Math.max(0,py))};
+    return {
+      px:Math.min(100,Math.max(0,px)),
+      py:Math.min(100,Math.max(0,py))
+    };
   }
-  function percentToAbsXY(m){return{absX:baseViewBox.x+(m.px/100)*baseViewBox.width,absY:baseViewBox.y+(m.py/100)*baseViewBox.height};}
-  function getCurrentMarkerRadius(){
-    const zoomFactor=baseViewBox.width/vb.width;
-    const t=(zoomFactor-1)/(ZOOM_MAX-1);
-    const scaleNow=SCALE_OUT*(1-t)+SCALE_IN*t;
-    return Math.max(baseViewBox.width,baseViewBox.height)*0.006*scaleNow;
+  function percentToAbsXY(m){
+    return {
+      absX:baseViewBox.x+(m.px/100)*baseViewBox.width,
+      absY:baseViewBox.y+(m.py/100)*baseViewBox.height
+    };
   }
 
+  // Marker-Radius dynamisch nach Zoom
+  function getCurrentMarkerRadius(){
+    const zoomFactor=baseViewBox.width/vb.width; // 1 .. ZOOM_MAX
+    const t=(zoomFactor-1)/(ZOOM_MAX-1);         // 0 .. 1
+    const scaleNow=SCALE_OUT*(1-t)+SCALE_IN*t;   // lerp zwischen OUT und IN
+    const baseLen=Math.max(baseViewBox.width,baseViewBox.height);
+    return baseLen*0.006*scaleNow;
+  }
+
+  // Shift + Linksklick -> Marker setzen
   function onSvgClickAdd(evt){
     if(!evt.shiftKey)return;
-    if(evt.target.closest&&evt.target.closest('#markerLayer'))return;
-    const{px,py}=clientToBasePercent(evt);
+    // Nicht doppelt erstellen, wenn man auf Marker klickt
+    if(evt.target.closest && evt.target.closest('#markerLayer')) return;
+    const {px,py}=clientToBasePercent(evt);
     const m=createMarker(px,py);
-    saveLocal();upsertRemote(m);renderMarkers();
+    saveLocal();
+    upsertRemote(m);
+    renderMarkers();
   }
-  function createMarker(px,py){const m={id:getNextId(),px,py,visible:true,createdAt:Date.now()};markers.push(m);return m;}
+
+  function createMarker(px,py){
+    const m={
+      id:getNextId(),
+      px,
+      py,
+      visible:true,
+      createdAt:Date.now()
+    };
+    markers.push(m);
+    return m;
+  }
+
   function renderMarkers(){
-    markerLayer.innerHTML='';markerDomMap={};
-    const r=getCurrentMarkerRadius();
-    markers.filter(m=>m.visible).forEach(m=>{
-      const{absX,absY}=percentToAbsXY(m);
-      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-      g.classList.add('marker');g.dataset.id=m.id;
-      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
-      c.setAttribute('cx',absX);c.setAttribute('cy',absY);c.setAttribute('r',r);
-      g.appendChild(c);markerLayer.appendChild(g);markerDomMap[m.id]=g;
-      attachMarkerInteractions(g,m);
-    });
+    markerLayer.innerHTML='';
+    markerDomMap={};
+
+    const dynR=getCurrentMarkerRadius();
+
+    markers
+      .filter(m=>m.visible)
+      .forEach(m=>{
+        const {absX,absY}=percentToAbsXY(m);
+
+        const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+        g.classList.add('marker');
+        g.setAttribute('data-id',m.id);
+
+        const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        circle.setAttribute('cx',absX);
+        circle.setAttribute('cy',absY);
+        circle.setAttribute('r',dynR);
+
+        g.appendChild(circle);
+        markerLayer.appendChild(g);
+
+        markerDomMap[m.id]=g;
+
+        attachMarkerInteractions(g,m);
+      });
+
     rebuildHistory();
   }
+
+  // Marker-Interaktion:
+  // - Linksklick halten = verschieben
+  // - Shift + Rechtsklick = ausblenden ("löschen")
   function attachMarkerInteractions(g,m){
     let dragging=false;
+
     g.addEventListener('mousedown',e=>{
-      if(e.button===0&&!e.shiftKey){dragging=true;e.preventDefault();}
-      if(e.button===2&&e.shiftKey){e.preventDefault();m.visible=false;saveLocal();upsertRemote(m);renderMarkers();}
+      // Linke Taste ohne Shift -> Drag starten
+      if(e.button===0 && !e.shiftKey){
+        dragging=true;
+        e.preventDefault();
+      }
+      // Rechte Taste mit Shift -> ausblenden
+      if(e.button===2 && e.shiftKey){
+        e.preventDefault();
+        m.visible=false;
+        saveLocal();
+        upsertRemote(m);
+        renderMarkers();
+      }
     });
-    g._dragMarkerRef=m;g._isDragging=()=>dragging;g._stopDragging=()=>{dragging=false;};
+
+    g._dragMarkerRef=m;
+    g._isDragging=()=>dragging;
+    g._stopDragging=()=>{dragging=false;};
   }
+
+  // Drag Bewegung in Echtzeit
   function dragMoveMarkerIfNeeded(evt){
     for(const id in markerDomMap){
-      const g=markerDomMap[id],m=markers.find(x=>x.id===id);
-      if(!m||!g._isDragging||!g._isDragging())continue;
-      const p=clientToBasePercent(evt);m.px=p.px;m.py=p.py;
-      const{absX,absY}=percentToAbsXY(m);g.querySelector('circle').setAttribute('cx',absX);g.querySelector('circle').setAttribute('cy',absY);
+      const g=markerDomMap[id];
+      const m=markers.find(mm=>mm.id===id);
+      if(!m || !g._isDragging || !g._isDragging()) continue;
+
+      const p=clientToBasePercent(evt);
+      m.px=p.px;
+      m.py=p.py;
+
+      const {absX,absY}=percentToAbsXY(m);
+      const circle=g.querySelector('circle');
+      circle.setAttribute('cx',absX);
+      circle.setAttribute('cy',absY);
     }
   }
+
+  // Drag loslassen = speichern/sync
   function dragStopIfNeeded(){
     for(const id in markerDomMap){
-      const g=markerDomMap[id],m=markers.find(x=>x.id===id);
-      if(!m||!g._isDragging||!g._isDragging())continue;
-      g._stopDragging();saveLocal();upsertRemote(m);renderMarkers();
+      const g=markerDomMap[id];
+      const m=markers.find(mm=>mm.id===id);
+      if(!m || !g._isDragging || !g._isDragging()) continue;
+
+      g._stopDragging();
+      saveLocal();
+      upsertRemote(m);
+      renderMarkers();
     }
   }
+
+  // History rechts
+  // zeigt nur sichtbare Marker, neueste oben
+  // Klick halten => Highlight
   function rebuildHistory(){
-    const list=$('#historyList');list.innerHTML='';
-    markers.filter(m=>m.visible).slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(m=>{
-      const item=document.createElement('div');
-      item.className='historyItem';item.textContent='Marker '+m.id;item.dataset.id=m.id;
-      let pressed=false;
-      item.addEventListener('mousedown',e=>{if(e.button!==0)return;pressed=true;highlightMarker(m.id,true);e.preventDefault();});
-      window.addEventListener('mouseup',()=>{if(!pressed)return;pressed=false;highlightMarker(m.id,false);});
-      list.appendChild(item);
-    });
+    const list=$('#historyList');
+    list.innerHTML='';
+
+    markers
+      .filter(m=>m.visible)
+      .slice()
+      .sort((a,b)=>b.createdAt-a.createdAt)
+      .forEach(m=>{
+        const item=document.createElement('div');
+        item.className='historyItem';
+        item.textContent='Marker '+m.id;
+        item.dataset.id=m.id;
+
+        let pressed=false;
+
+        item.addEventListener('mousedown',e=>{
+          if(e.button!==0)return;
+          pressed=true;
+          highlightMarker(m.id,true);
+          e.preventDefault();
+        });
+
+        window.addEventListener('mouseup',()=>{
+          if(!pressed)return;
+          pressed=false;
+          highlightMarker(m.id,false);
+        });
+
+        list.appendChild(item);
+      });
   }
-  function highlightMarker(id,on){const g=markerDomMap[id];if(!g)return;if(on)g.classList.add('highlight');else g.classList.remove('highlight');}
+
+  function highlightMarker(id,on){
+    const g=markerDomMap[id];
+    if(!g)return;
+    if(on)g.classList.add('highlight');
+    else g.classList.remove('highlight');
+  }
+
+  // Pan & Zoom mit Begrenzung
   function clampAndSetViewBox(x,y,w,h){
-    if(w>baseViewBox.width)w=baseViewBox.width;if(h>baseViewBox.height)h=baseViewBox.height;
-    const minX=baseViewBox.x,maxX=baseViewBox.x+baseViewBox.width-w,minY=baseViewBox.y,maxY=baseViewBox.y+baseViewBox.height-h;
-    if(x<minX)x=minX;if(x>maxX)x=maxX;if(y<minY)y=minY;if(y>maxY)y=maxY;
-    const sizeChanged=(w!==vb.width||h!==vb.height);
-    vb={x,y,width:w,height:h};svg.setAttribute('viewBox',`${x} ${y} ${w} ${h}`);
-    if(sizeChanged)renderMarkers();
+    // Rauszoomen begrenzen
+    if(w>baseViewBox.width) w=baseViewBox.width;
+    if(h>baseViewBox.height)h=baseViewBox.height;
+
+    // Pan begrenzen
+    const minX=baseViewBox.x;
+    const maxX=baseViewBox.x+baseViewBox.width -w;
+    const minY=baseViewBox.y;
+    const maxY=baseViewBox.y+baseViewBox.height-h;
+
+    if(x<minX)x=minX;
+    if(x>maxX)x=maxX;
+    if(y<minY)y=minY;
+    if(y>maxY)y=maxY;
+
+    const sizeChanged=(w!==vb.width || h!==vb.height);
+
+    vb={x,y,width:w,height:h};
+    svg.setAttribute('viewBox',`${x} ${y} ${w} ${h}`);
+
+    // bei Zoom neu rendern -> passt Radius an
+    if(sizeChanged){
+      renderMarkers();
+    }
   }
+
   function onWheel(e){
     e.preventDefault();
-    const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+
+    const pt=svg.createSVGPoint();
+    pt.x=e.clientX;pt.y=e.clientY;
     const sp=pt.matrixTransform(svg.getScreenCTM().inverse());
+
     const scale=(e.deltaY<0)?(1/ZOOM_FACTOR):ZOOM_FACTOR;
-    let newW=vb.width*scale,newH=vb.height*scale;
-    const minW=baseViewBox.width/ZOOM_MAX,minH=baseViewBox.height/ZOOM_MAX;
-    if(newW<minW)newW=minW;if(newH<minH)newH=minH;
-    const maxW=baseViewBox.width,maxH=baseViewBox.height;
-    if(newW>maxW)newW=maxW;if(newH>maxH)newH=maxH;
-    const kx=(sp.x-vb.x)/vb.width,ky=(sp.y-vb.y)/vb.height;
-    const newX=sp.x-kx*newW,newY=sp.y-ky*newH;
+    let newW=vb.width*scale;
+    let newH=vb.height*scale;
+
+    // max rein
+    const minW=baseViewBox.width/ZOOM_MAX;
+    const minH=baseViewBox.height/ZOOM_MAX;
+    if(newW<minW)newW=minW;
+    if(newH<minH)newH=minH;
+
+    // max raus
+    const maxW=baseViewBox.width;
+    const maxH=baseViewBox.height;
+    if(newW>maxW)newW=maxW;
+    if(newH>maxH)newH=maxH;
+
+    // Fokus auf Maus halten
+    const kx=(sp.x-vb.x)/vb.width;
+    const ky=(sp.y-vb.y)/vb.height;
+    const newX=sp.x-kx*newW;
+    const newY=sp.y-ky*newH;
+
     clampAndSetViewBox(newX,newY,newW,newH);
   }
+
+  // Pan / Drag
   function onMouseDownPanOrMarkerStart(e){
-    if((e.button===0&&spacePressed)||(e.button===2&&!e.shiftKey)){isPanning=true;panStart={x:e.clientX,y:e.clientY};panStartVB={...vb};e.preventDefault();}
+    // Pan: Space+Linksklick ODER Rechtsklick (ohne Shift)
+    if((e.button===0 && spacePressed) ||
+       (e.button===2 && !e.shiftKey)){
+      isPanning=true;
+      panStart={x:e.clientX,y:e.clientY};
+      panStartVB={...vb};
+      e.preventDefault();
+    }
   }
-  function onMouseMoveAll(e){dragMoveMarkerIfNeeded(e);
+
+  function onMouseMoveAll(e){
+    // Markerdrag live
+    dragMoveMarkerIfNeeded(e);
+
+    // Pan?
     if(!isPanning)return;
-    const dx=e.clientX-panStart.x,dy=e.clientY-panStart.y,m=svg.getScreenCTM();
-    const sx=vb.width/(m.a*svg.clientWidth),sy=vb.height/(m.d*svg.clientHeight);
-    clampAndSetViewBox(panStartVB.x-dx*sx,panStartVB.y-dy*sy,vb.width,vb.height);
+
+    const dx=e.clientX-panStart.x;
+    const dy=e.clientY-panStart.y;
+
+    const m=svg.getScreenCTM();
+    const scaleX=vb.width /(m.a*svg.clientWidth);
+    const scaleY=vb.height/(m.d*svg.clientHeight);
+
+    const newX=panStartVB.x-dx*scaleX;
+    const newY=panStartVB.y-dy*scaleY;
+
+    // Nur Pan -> Größe ändert sich nicht, renderMarkers nicht nötig hier
+    clampAndSetViewBox(newX,newY,vb.width,vb.height);
   }
-  function onMouseUpAll(){isPanning=false;dragStopIfNeeded();}
-  function saveLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(markers));}
-  function loadLocal(){try{markers=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch(e){markers=[];}}
+
+  function onMouseUpAll(){
+    isPanning=false;
+    dragStopIfNeeded();
+  }
+
+  // Persistenz
+  function saveLocal(){
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(markers));
+  }
+
+  function loadLocal(){
+    try{
+      markers=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+    }catch(e){
+      markers=[];
+    }
+  }
+
   async function loadFromSheet(){
     const qs=TOKEN?`?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}`:`?t=${Date.now()}`;
-    const res=await fetch(WEB_APP_URL+qs);if(!res.ok)throw new Error('GET failed');
+    const res=await fetch(WEB_APP_URL+qs,{method:'GET'});
+    if(!res.ok)throw new Error('GET failed');
+
     const data=await res.json();
-    markers=Array.isArray(data.markers)?data.markers.map(m=>({
-      id:m.id,
-      px:+m.px,
-      py:+m.py,
-      visible:(m.visible===true||m.visible==="TRUE"||m.visible===1),
-      createdAt:m.createdAt?+m.createdAt:Date.now()
-    })):[];
-    updateNextId();saveLocal();renderMarkers();
+    markers = Array.isArray(data.markers)
+      ? data.markers.map(m=>({
+          id:m.id,
+          px:Number(m.px),
+          py:Number(m.py),
+          visible:(m.visible===true || m.visible==="TRUE" || m.visible===1),
+          createdAt:m.createdAt?Number(m.createdAt):Date.now()
+        }))
+      : [];
+
+    updateNextIdFromMarkers();
+    saveLocal();
+    renderMarkers();
   }
-  function formBody(p){const u=new URLSearchParams();Object.entries(p).forEach(([k,v])=>u.set(k,v));if(TOKEN)u.set('token',TOKEN);return u.toString();}
+
+  function formBody(params){
+    const p=new URLSearchParams();
+    Object.entries(params).forEach(([k,v])=>p.set(k,v));
+    if(TOKEN)p.set('token',TOKEN);
+    return p.toString();
+  }
+
   function upsertRemote(m){
-    fetch(WEB_APP_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:formBody({action:'upsert',payload:JSON.stringify({
-        id:m.id,px:m.px,py:m.py,label:"",visible:m.visible,createdAt:m.createdAt||Date.now()
-      })})
+    // bool visible direkt mitspeichern
+    fetch(WEB_APP_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:formBody({
+        action:'upsert',
+        payload: JSON.stringify({
+          id:m.id,
+          px:m.px,
+          py:m.py,
+          label:"", // legacy
+          visible:m.visible,
+          createdAt:m.createdAt||Date.now()
+        })
+      })
     }).catch(()=>{});
   }
+
 })();
 </script>
 </body>
