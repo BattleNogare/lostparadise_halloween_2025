@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Halloween 2025 - Lostparadise.eu</title>
+  <title>Halloween 2025</title>
 
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/halloween_fav.ico">
@@ -19,7 +19,7 @@
       --text-main: #f0e6d8;
       --text-dim: #b7a999;
 
-      --marker-fill: rgba(255,60,0,0.9);
+      --marker-fill: rgba(255,60,0,0.9); /* normales Orange/Blut */
       --marker-stroke: #ff6a00;
 
       /* Pinker Highlight-Glow */
@@ -86,18 +86,18 @@
       display:block;
     }
 
-    .neonText {
-      font-family: 'Rubik Wet Paint', cursive;
-      font-size: 1.8rem;
-      font-weight: 100;
-      color: var(--border-glow);
-      text-shadow:
-        0 0 4px rgba(255,106,0,1),
-        0 0 8px rgba(255,106,0,0.8);
-      letter-spacing: 0.04em;
-      animation: flicker 3s infinite steps(1);
-      white-space: nowrap;
-    }
+.neonText {
+  font-family: 'Rubik Wet Paint', cursive;
+  font-size: 1.8rem;
+  font-weight: 100;
+  color: var(--border-glow);
+  text-shadow:
+    0 0 4px rgba(255,106,0,1),
+    0 0 8px rgba(255,106,0,0.8);
+  letter-spacing: 0.04em;
+  animation: flicker 3s infinite steps(1);
+  white-space: nowrap;
+}
 
     @keyframes flicker {
       0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity:1; }
@@ -146,7 +146,6 @@
       color:var(--text-main);
       font-size:0.9rem;
       box-shadow:0 0 20px rgba(255,106,0,0.3);
-      height:80vh; /* gleiche Höhe wie die Karte */
     }
 
     #historyHeader {
@@ -163,38 +162,6 @@
       flex:1;
       overflow:auto;
       padding:8px 10px;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255,106,0,0.6) #1a1a24;
-    }
-
-    #historyList::-webkit-scrollbar {
-      width:8px;
-    }
-
-    #historyList::-webkit-scrollbar-track {
-      background:#1a1a24;
-      border-radius:4px;
-      box-shadow:0 0 6px rgba(0,0,0,0.8) inset;
-    }
-
-    #historyList::-webkit-scrollbar-thumb {
-      background:linear-gradient(
-        180deg,
-        rgba(255,106,0,0.9) 0%,
-        rgba(120,0,0,0.7) 100%
-      );
-      border-radius:4px;
-      box-shadow:0 0 8px rgba(255,106,0,0.6);
-      border:1px solid #ff6a00;
-    }
-
-    #historyList::-webkit-scrollbar-thumb:hover {
-      background:linear-gradient(
-        180deg,
-        rgba(255,106,0,1) 0%,
-        rgba(180,0,60,0.8) 100%
-      );
-      box-shadow:0 0 10px rgba(255,106,0,0.9);
     }
 
     .historyItem {
@@ -208,12 +175,12 @@
       transition:background .1s, box-shadow .1s;
       color:var(--text-main);
     }
-
     .historyItem:hover {
       background:rgba(255,106,0,0.15);
       box-shadow:0 0 10px rgba(255,106,0,0.5);
     }
 
+    /* Marker */
     .marker circle {
       stroke:var(--marker-stroke);
       stroke-width:1;
@@ -226,26 +193,25 @@
       fill:var(--marker-highlight-fill);
       stroke:var(--marker-highlight-stroke);
       stroke-width:3;
-      filter: drop-shadow(0 0 8px rgba(255,105,180,0.8));
+      filter: drop-shadow(0 0 8px rgba(255,105,180,0.8)); /* pink glow */
     }
-
-    /* Footer-Signatur */
+    /* Footer-Signatur unten links */
     #footerSignature {
-      position:fixed;
-      bottom:10px;
-      left:15px;
-      font-size:0.8rem;
-      color:var(--text-dim);
-      opacity:0.7;
-      font-style:italic;
-      z-index:9999;
-      transition:opacity 0.3s;
+      position: fixed;
+      bottom: 10px;
+      left: 15px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      opacity: 0.7;
+      font-style: italic;
+      z-index: 9999;
+      transition: opacity 0.3s;
     }
     #footerSignature:hover {
-      opacity:1;
-      color:var(--border-glow);
-      text-shadow:0 0 6px var(--border-glow);
-      cursor:default;
+      opacity: 1;
+      color: var(--border-glow);
+      text-shadow: 0 0 6px var(--border-glow);
+      cursor: default;
     }
 
     #markerLayer { pointer-events:none; }
@@ -254,13 +220,14 @@
 </head>
 <body>
 <div id="wrap">
+
   <header>
     <div id="toolbar">
       <div class="hint">
         Shift + Linksklick = Marker setzen •
         Linksklick halten = verschieben •
         Shift + Rechtsklick = löschen
-        <br>
+        <br></br>
         Scroll = Zoom •
         Leertaste+Ziehen / Rechtsklick+Ziehen = Pan
       </div>
@@ -287,11 +254,508 @@
 </div>
 
 <script>
-/* --- dein kompletter JS-Code aus der vorherigen Version bleibt unverändert --- */
-</script>
+(function(){
+  // === KONFIG ===
+  const SVG_PATH='https://raw.githubusercontent.com/BattleNogare/lostparadise_halloween_2025/main/map.svg';
 
-<div id="footerSignature">
-  Made by <strong>Marius Braun</strong>
-</div>
+  // Deine Apps-Script Web-App URL
+  const WEB_APP_URL='https://script.google.com/macros/s/AKfycbyUq4LMZhjRkzG2pwmNrgG1GdLjFi6H3bivz_2SEDYA0m9_lMrPQjxdFmEo0ukgdeCKKA/exec';
+
+  // Falls du Token-Schutz im Script aktivierst:
+  const TOKEN = null; // oder z.B. "GEHEIMWERT"
+
+  const STORAGE_KEY='markers.v1';
+
+  const ZOOM_FACTOR=1.4;
+  const ZOOM_MAX=20;
+
+  // Marker-Size lerp:
+  const SCALE_OUT=0.8; // rausgezoomt
+  const SCALE_IN =0.1; // maximal reingezoomt
+
+  // STATE
+  let svg, markerLayer;
+  let vb;          // aktuelle ViewBox {x,y,width,height}
+  let baseViewBox; // gesamte Karte
+  let isPanning=false;
+  let panStart=null;
+  let panStartVB=null;
+  let spacePressed=false;
+
+  // Marker-Struktur:
+  // {
+  //   uid: "m_xxx"    (random unique, speicher-key)
+  //   displayId: "0001" (laufende Anzeige-ID für History)
+  //   px, py: Prozent auf Karte
+  //   visible: true/false
+  //   createdAt: timestamp
+  // }
+  let markers=[];
+  let markerDomMap={}; // uid -> SVG <g>
+
+  // Counter für displayId
+  let nextDisplayIdNum=1;
+
+  // Hilfsfunktionen
+  const $=(sel,root=document)=>root.querySelector(sel);
+
+  function genUid(){
+    // ziemlich eindeutige clientseitige ID
+    return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+  }
+
+  function getNextDisplayId(){
+    const s = String(nextDisplayIdNum).padStart(4,'0');
+    nextDisplayIdNum++;
+    return s;
+  }
+
+  function updateNextDisplayIdFromMarkers(){
+    const nums = markers
+      .map(m => parseInt(m.displayId,10))
+      .filter(n => !isNaN(n));
+    nextDisplayIdNum = (nums.length ? Math.max(...nums)+1 : 1);
+  }
+
+  // ====== INITIAL SETUP ======
+  fetch(SVG_PATH).then(r=>r.text()).then(txt=>{
+    $('#svgRoot').outerHTML = txt
+      .replace('<svg','<svg id="svgRoot" style="width:100%;height:100%;touch-action:none;background:#000;"')
+      .replace('</svg>','<g id="markerLayer"></g></svg>');
+
+    svg = $('#svgRoot');
+    markerLayer = $('#markerLayer');
+
+    // Kontextmenü auf Karte aus
+    $('#stage').addEventListener('contextmenu', e=>e.preventDefault());
+    svg.addEventListener('contextmenu', e=>e.preventDefault());
+
+    // ViewBox initialisieren
+    if (!svg.getAttribute('viewBox')) {
+      const w = parseFloat(svg.getAttribute('width')) || 1000;
+      const h = parseFloat(svg.getAttribute('height')) || 1000;
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    }
+    {
+      const [x,y,w,h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+      vb = {x,y,width:w,height:h};
+      baseViewBox = {...vb};
+    }
+
+    // Event-Listener
+    svg.addEventListener('click', onSvgClickAdd);               // Shift + Linksklick -> Marker neu
+    svg.addEventListener('wheel', onWheel, {passive:false});    // Zoom
+    svg.addEventListener('mousedown', onMouseDownPanOrDragStart);
+    window.addEventListener('mousemove', onMouseMoveAll);
+    window.addEventListener('mouseup', onMouseUpAll);
+
+    window.addEventListener('keydown', e=>{
+      if(e.code==='Space'){
+        spacePressed=true;
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', e=>{
+      if(e.code==='Space'){
+        spacePressed=false;
+      }
+    });
+
+    // Daten holen:
+    // 1. Versuch: Sheet
+    loadFromSheet().catch(()=>{
+      // fallback: local
+      loadLocal();
+      updateNextDisplayIdFromMarkers();
+      renderMarkers();
+      rebuildHistory();
+    });
+  });
+
+  // ====== VIEWBOX / ZOOM / PAN ======
+
+  function clampViewBox(x,y,width,height){
+    // nicht weiter raus als Ganze Karte
+    if (width  > baseViewBox.width)  width  = baseViewBox.width;
+    if (height > baseViewBox.height) height = baseViewBox.height;
+
+    // nicht raus pannen
+    const minX = baseViewBox.x;
+    const maxX = baseViewBox.x + baseViewBox.width  - width;
+    const minY = baseViewBox.y;
+    const maxY = baseViewBox.y + baseViewBox.height - height;
+
+    if (x < minX) x = minX;
+    if (x > maxX) x = maxX;
+    if (y < minY) y = minY;
+    if (y > maxY) y = maxY;
+
+    return {x,y,width,height};
+  }
+
+  function setViewBox(newVB, {rerender}){
+    vb = newVB;
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.width} ${vb.height}`);
+    if (rerender) {
+      renderMarkers();
+      rebuildHistory();
+    }
+  }
+
+  // ====== KOORDINATEN / RADIUS ======
+
+  function clientToBasePercent(evt){
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const px = (sp.x - baseViewBox.x) / baseViewBox.width  * 100;
+    const py = (sp.y - baseViewBox.y) / baseViewBox.height * 100;
+
+    return {
+      px: Math.min(100, Math.max(0, px)),
+      py: Math.min(100, Math.max(0, py))
+    };
+  }
+
+  function percentToAbsXY(m){
+    return {
+      absX: baseViewBox.x + (m.px/100)*baseViewBox.width,
+      absY: baseViewBox.y + (m.py/100)*baseViewBox.height
+    };
+  }
+
+  function getCurrentMarkerRadius(){
+    // zoomFactor: 1 (raus) .. ZOOM_MAX (rein)
+    const zoomFactor = baseViewBox.width / vb.width;
+    const t = (zoomFactor - 1) / (ZOOM_MAX - 1); // 0..1
+    const scaleNow = SCALE_OUT*(1 - t) + SCALE_IN*t;
+    const baseLen = Math.max(baseViewBox.width, baseViewBox.height);
+    return baseLen * 0.006 * scaleNow;
+  }
+
+  // ====== MARKER: ERSTELLEN / RENDERN / INTERAKTION ======
+
+  function onSvgClickAdd(evt){
+    if (!evt.shiftKey) return;
+    // nicht doppelt erstellen, wenn direkt auf Marker geklickt wurde
+    if (evt.target.closest && evt.target.closest('#markerLayer')) return;
+
+    const {px,py} = clientToBasePercent(evt);
+
+    const m = {
+      uid: genUid(),
+      displayId: getNextDisplayId(),
+      px,
+      py,
+      visible: true,
+      createdAt: Date.now()
+    };
+
+    markers.push(m);
+    saveLocal();
+    upsertRemote(m);
+    renderMarkers();
+    rebuildHistory();
+  }
+
+  function renderMarkers(){
+    if (!markerLayer) return;
+    markerLayer.innerHTML = '';
+    markerDomMap = {};
+
+    const dynR = getCurrentMarkerRadius();
+
+    markers
+      .filter(m=>m.visible)
+      .forEach(m=>{
+        const {absX,absY} = percentToAbsXY(m);
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+        g.classList.add('marker');
+        g.setAttribute('data-uid',m.uid);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        circle.setAttribute('cx',absX);
+        circle.setAttribute('cy',absY);
+        circle.setAttribute('r',dynR);
+
+        g.appendChild(circle);
+        markerLayer.appendChild(g);
+
+        markerDomMap[m.uid] = g;
+        attachMarkerInteraction(g,m);
+      });
+  }
+
+  // Marker-Verhalten:
+  // - Linksklick halten (ohne Shift): Drag
+  // - Shift+Rechtsklick: ausblenden (visible=false)
+  function attachMarkerInteraction(g,m){
+    let dragging=false;
+
+    g.addEventListener('mousedown', e=>{
+      // Drag starten
+      if(e.button===0 && !e.shiftKey){
+        dragging=true;
+        e.preventDefault();
+      }
+      // Ausblenden
+      if(e.button===2 && e.shiftKey){
+        e.preventDefault();
+        m.visible=false;
+        saveLocal();
+        upsertRemote(m);
+        renderMarkers();
+        rebuildHistory();
+      }
+    });
+
+    g._dragUid      = m.uid;
+    g._isDragging   = () => dragging;
+    g._stopDragging = () => { dragging=false; };
+  }
+
+  function dragMoveMarkerIfNeeded(evt){
+    for(const uid in markerDomMap){
+      const g = markerDomMap[uid];
+      const m = markers.find(mm=>mm.uid===uid);
+      if (!m || !g._isDragging || !g._isDragging()) continue;
+
+      const p = clientToBasePercent(evt);
+      m.px = p.px;
+      m.py = p.py;
+
+      const {absX,absY} = percentToAbsXY(m);
+      const circle = g.querySelector('circle');
+      circle.setAttribute('cx',absX);
+      circle.setAttribute('cy',absY);
+    }
+  }
+
+  function dragStopIfNeeded(){
+    for(const uid in markerDomMap){
+      const g = markerDomMap[uid];
+      const m = markers.find(mm=>mm.uid===uid);
+      if (!m || !g._isDragging || !g._isDragging()) continue;
+
+      g._stopDragging();
+      saveLocal();
+      upsertRemote(m);
+      renderMarkers();
+      rebuildHistory();
+    }
+  }
+
+  // ====== HISTORY ======
+
+  function rebuildHistory(){
+    const list = $('#historyList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    markers
+      .filter(m=>m.visible)
+      .slice()
+      .sort((a,b)=>b.createdAt - a.createdAt)
+      .forEach(m=>{
+        const item = document.createElement('div');
+        item.className='historyItem';
+        item.textContent='Marker ' + m.displayId;
+        item.dataset.uid = m.uid;
+
+        let held=false;
+
+        item.addEventListener('mousedown', e=>{
+          if(e.button!==0) return;
+          held=true;
+          highlightMarker(m.uid,true);
+          e.preventDefault();
+        });
+
+        window.addEventListener('mouseup', ()=>{
+          if(!held) return;
+          held=false;
+          highlightMarker(m.uid,false);
+        });
+
+        list.appendChild(item);
+      });
+  }
+
+  function highlightMarker(uid,on){
+    const g = markerDomMap[uid];
+    if(!g)return;
+    if(on) g.classList.add('highlight');
+    else   g.classList.remove('highlight');
+  }
+
+  // ====== ZOOM ======
+
+  function onWheel(e){
+    e.preventDefault();
+
+    // Punkt unter der Maus als Zoom-Zentrum
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const scale = (e.deltaY<0) ? (1/ZOOM_FACTOR) : ZOOM_FACTOR;
+
+    let newW = vb.width  * scale;
+    let newH = vb.height * scale;
+
+    // Minimum (maximal rein)
+    const minW = baseViewBox.width  / ZOOM_MAX;
+    const minH = baseViewBox.height / ZOOM_MAX;
+    if (newW < minW) newW = minW;
+    if (newH < minH) newH = minH;
+
+    // Maximum (komplett raus)
+    if (newW > baseViewBox.width ) newW = baseViewBox.width;
+    if (newH > baseViewBox.height) newH = baseViewBox.height;
+
+    // Neue obere linke Ecke so, dass der Mauspunkt stehen bleibt
+    const kx=(sp.x - vb.x)/vb.width;
+    const ky=(sp.y - vb.y)/vb.height;
+    const newX = sp.x - kx*newW;
+    const newY = sp.y - ky*newH;
+
+    const clamped = clampViewBox(newX,newY,newW,newH);
+
+    // Zoom -> Markergröße ändert sich -> rerender
+    setViewBox(clamped,{rerender:true});
+  }
+
+  // ====== PAN / GLOBAL MOUSE ======
+
+  function onMouseDownPanOrDragStart(e){
+    // Pan-Modus: Space+LMB oder RMB ohne Shift
+    if ((e.button===0 && spacePressed) ||
+        (e.button===2 && !e.shiftKey)) {
+
+      isPanning=true;
+      panStart   ={x:e.clientX,y:e.clientY};
+      panStartVB ={...vb};
+      e.preventDefault();
+    }
+  }
+
+  function onMouseMoveAll(e){
+    // Falls gerade Marker verschoben wird
+    dragMoveMarkerIfNeeded(e);
+
+    if (!isPanning) return;
+
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+
+    const m = svg.getScreenCTM();
+    const scaleX = vb.width  / (m.a * svg.clientWidth);
+    const scaleY = vb.height / (m.d * svg.clientHeight);
+
+    const newX = panStartVB.x - dx * scaleX;
+    const newY = panStartVB.y - dy * scaleY;
+
+    const clamped = clampViewBox(newX,newY,vb.width,vb.height);
+
+    // Pan ändert nur x,y, nicht width/height -> Markergröße bleibt gleich
+    setViewBox(clamped,{rerender:false});
+  }
+
+  function onMouseUpAll(){
+    isPanning=false;
+    dragStopIfNeeded();
+  }
+
+  // ====== LOCAL STORAGE ======
+
+  function saveLocal(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(markers));
+  }
+
+  function loadLocal(){
+    try {
+      markers = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch {
+      markers = [];
+    }
+  }
+
+  function updateNextDisplayIdFromMarkers(){
+    const nums = markers
+      .map(m => parseInt(m.displayId,10))
+      .filter(n => !isNaN(n));
+    nextDisplayIdNum = (nums.length ? Math.max(...nums)+1 : 1);
+  }
+
+  // ====== SHEET SYNC ======
+
+  // Marker vom Sheet laden
+  async function loadFromSheet(){
+    const qs = TOKEN
+      ? `?token=${encodeURIComponent(TOKEN)}&t=${Date.now()}`
+      : `?t=${Date.now()}`;
+
+    const res = await fetch(WEB_APP_URL + qs, { method:'GET' });
+    if (!res.ok) throw new Error('GET failed');
+
+    const data = await res.json();
+
+    // Erwartet vom Script:
+    // { markers: [ {uid, displayId, px, py, visible, createdAt, ...}, ... ] }
+    markers = Array.isArray(data.markers)
+      ? data.markers.map(m => ({
+          uid:        m.uid,
+          displayId:  m.displayId,
+          px:         Number(m.px),
+          py:         Number(m.py),
+          visible:    (m.visible === true || m.visible === "TRUE" || m.visible === 1 || m.visible === "1"),
+          createdAt:  m.createdAt ? Number(m.createdAt) : Date.now()
+        }))
+      : [];
+
+    updateNextDisplayIdFromMarkers();
+    saveLocal();
+
+    renderMarkers();
+    rebuildHistory();
+  }
+
+  // Hilfsfunktion um POST-Body zu bauen
+  function formBody(params){
+    const p = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => p.set(k, v));
+    if (TOKEN) p.set('token', TOKEN);
+    return p.toString();
+  }
+
+  // Einzelnen Marker ans Sheet schicken (upsert über uid)
+  function upsertRemote(m){
+    fetch(WEB_APP_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: formBody({
+        action: 'upsert',
+        payload: JSON.stringify({
+          uid:        m.uid,
+          displayId:  m.displayId,
+          px:         m.px,
+          py:         m.py,
+          label:      "",               // wir nutzen aktuell kein Label
+          visible:    m.visible,        // Boolean true/false
+          createdAt:  m.createdAt || Date.now()
+        })
+      })
+    }).catch(()=>{ /* offline? dann bleibt nur localStorage */ });
+  }
+
+})();
+</script>
+  <div id="footerSignature">
+    Made by <strong>Marius Braun</strong>
+  </div>
 </body>
 </html>
