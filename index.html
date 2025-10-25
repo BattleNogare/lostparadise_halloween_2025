@@ -139,6 +139,7 @@
       width:240px;
       flex:none;
       display:flex;
+      height:80vh;
       flex-direction:column;
       border:2px solid var(--border-glow);
       border-radius:8px;
@@ -163,6 +164,44 @@
       overflow:auto;
       padding:8px 10px;
     }
+
+    /* Custom Scrollbar nur für die History-Liste */
+#historyList {
+  scrollbar-width: thin;                          /* Firefox */
+  scrollbar-color: rgba(255,106,0,0.6) #1a1a24;   /* Firefox Thumb / Track */
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+#historyList::-webkit-scrollbar {
+  width: 8px;              /* Breite des Scrollbars */
+}
+
+#historyList::-webkit-scrollbar-track {
+  background: #1a1a24;     /* dunkler Track passend zu var(--bg-panel-alt) */
+  border-radius: 4px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.8) inset;
+}
+
+#historyList::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(255,106,0,0.9) 0%,
+    rgba(120,0,0,0.7) 100%
+  );
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(255,106,0,0.6);
+  border: 1px solid #ff6a00;
+}
+
+#historyList::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255,106,0,1) 0%,
+    rgba(180,0,60,0.8) 100%
+  );
+  box-shadow: 0 0 10px rgba(255,106,0,0.9);
+}
+
 
     .historyItem {
       padding:6px 8px;
